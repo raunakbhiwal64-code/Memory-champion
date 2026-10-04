@@ -1,12 +1,15 @@
 {
   "name": "mnemosyne",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A memory-sport training app (method of loci / memory palaces) — single self-contained HTML file.",
   "private": true,
   "scripts": {
-    "test": "for f in tests/*.js; do echo \"=== $f ===\"; node \"$f\" || exit 1; done"
+    "test": "for f in tests/*.js; do echo \"=== $f ===\"; node \"$f\" || exit 1; done",
+    "test:browser": "node tests/browser/castle.browser.js"
   },
   "devDependencies": {
-    "jsdom": "^24.0.0"
+    "jsdom": "^24.0.0",
+    "playwright": "^1.48.0",
+    "three": "0.128.0"
   }
 }

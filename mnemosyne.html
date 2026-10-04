@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
 :root{
   --bg:#14161c;
@@ -148,6 +149,36 @@ details.lesson-card summary > span:first-of-type{flex:1;}
 .lesson-body p{margin:0 0 12px;}
 .lesson-body p:last-child{margin-bottom:0;}
 
+/* ---------- CASTLE (3D palace) ---------- */
+.castle-hero{display:flex; justify-content:space-between; align-items:center; gap:18px; flex-wrap:wrap; margin-bottom:20px; border-color:var(--gold-dim); background:linear-gradient(120deg, #221d14, var(--surface) 60%);}
+#castle-root{position:fixed; inset:0; z-index:40; background:#07080c; display:none; overflow:hidden; user-select:none; -webkit-user-select:none; touch-action:none;}
+#castle-root.open{display:block;}
+#castle-canvas-wrap{position:absolute; inset:0;}
+#castle-canvas-wrap canvas{display:block; width:100%; height:100%; outline:none;}
+.castle-hud-top{position:absolute; top:0; left:0; right:0; display:flex; justify-content:space-between; align-items:flex-start; gap:12px; padding:14px 16px; pointer-events:none;}
+.castle-hud-top > *{pointer-events:auto;}
+.castle-chip{background:rgba(16,17,23,.82); border:1px solid var(--line); border-radius:var(--radius); padding:8px 12px; font-size:12.5px; color:var(--ink); backdrop-filter:blur(4px);}
+.castle-chip .mono{font-size:10.5px; color:var(--ink-mute); letter-spacing:.06em;}
+#castle-target{display:flex; align-items:center; gap:10px; max-width:min(420px, 60vw);}
+#castle-arrow{width:22px; height:22px; flex:0 0 22px; color:var(--gold); transition:transform .08s linear;}
+#castle-map{position:absolute; right:16px; bottom:16px; width:190px; height:190px; border:1px solid var(--gold-dim); border-radius:var(--radius); background:#d9c9a3; cursor:pointer; box-shadow:0 6px 20px rgba(0,0,0,.5);}
+#castle-map.big{width:min(560px, 92vw); height:min(560px, 70vh); right:50%; bottom:50%; transform:translate(50%,50%);}
+#castle-prompt{position:absolute; left:50%; bottom:90px; transform:translateX(-50%); display:none; text-align:center;}
+#castle-prompt.show{display:block;}
+#castle-prompt kbd{font-family:var(--mono); background:var(--gold); color:#1a1508; border-radius:3px; padding:1px 7px; margin-right:6px; font-weight:600;}
+#castle-help{position:absolute; left:16px; bottom:16px; font-size:11.5px; color:var(--ink-dim); line-height:1.7; max-width:300px;}
+#castle-panel{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:min(460px, 92vw); max-height:86vh; overflow-y:auto; display:none; background:var(--surface); border:1px solid var(--gold-dim); border-radius:var(--radius); padding:22px; box-shadow:0 12px 40px rgba(0,0,0,.6);}
+#castle-panel.open{display:block;}
+#castle-panel textarea{width:100%;}
+#castle-fallback{position:absolute; inset:0; display:none; align-items:center; justify-content:center; padding:24px;}
+#castle-fallback.show{display:flex;}
+.castle-touch{position:absolute; display:none;}
+.castle-touch-on .castle-touch{display:block;}
+#castle-joy{left:22px; bottom:22px; width:120px; height:120px; border-radius:50%; border:1px solid rgba(255,255,255,.18); background:rgba(255,255,255,.05);}
+#castle-joy-knob{position:absolute; left:40px; top:40px; width:40px; height:40px; border-radius:50%; background:rgba(205,161,58,.55);}
+#castle-act{right:22px; bottom:225px; width:68px; height:68px; border-radius:50%; border:1px solid var(--gold); background:rgba(205,161,58,.25); color:var(--ink); font-weight:600; font-size:12px;}
+.castle-touch-on #castle-help{display:none;}
+@media(max-width:700px){ #castle-map{width:130px; height:130px;} }
 .toast{position:fixed; bottom:24px; right:24px; background:var(--surface-3); border:1px solid var(--gold); color:var(--ink); padding:12px 18px; border-radius:var(--radius); font-size:13px; z-index:100; box-shadow:0 6px 20px rgba(0,0,0,.4);}
 </style>
 </head>
@@ -262,6 +293,7 @@ details.lesson-card summary > span:first-of-type{flex:1;}
           <div id="pd-basedon" style="margin-top:8px;"></div>
         </div>
         <div class="btn-row">
+          <button class="btn btn-gold" id="btn-enter-castle" style="display:none;">Enter the 3D castle</button>
           <button class="btn" id="btn-walk-study">Walk (study)</button>
           <button class="btn btn-gold" id="btn-walk-recall">Walk (recall)</button>
         </div>
@@ -343,6 +375,44 @@ details.lesson-card summary > span:first-of-type{flex:1;}
 </div>
 <div id="modal-root"></div>
 <div id="toast-root"></div>
+<div id="castle-root" aria-label="3D castle memory palace">
+  <div id="castle-canvas-wrap"></div>
+  <div class="castle-hud-top">
+    <div class="castle-chip" id="castle-status">
+      <div class="mono" id="castle-mode-label">CASTLE</div>
+      <div id="castle-room-label" style="font-family:var(--serif); font-size:15px;">—</div>
+    </div>
+    <div class="castle-chip" id="castle-target">
+      <svg id="castle-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L19 20 L12 15 L5 20 Z" fill="currentColor"/></svg>
+      <div><div class="mono" id="castle-target-label">NEXT</div><div id="castle-target-text" style="font-size:12.5px;">—</div></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-sm" id="castle-btn-mode">Start recall walk</button>
+      <button class="btn btn-sm btn-ghost" id="castle-btn-exit" style="background:rgba(16,17,23,.82);">Exit castle</button>
+    </div>
+  </div>
+  <div id="castle-prompt" class="castle-chip"></div>
+  <div id="castle-help" class="castle-chip">
+    <b>W A S D</b> or arrows to walk · <b>Shift</b> to run<br>
+    Drag the mouse to look around · scroll to zoom<br>
+    <b>E</b> at a glowing circle to leave or recall a memory<br>
+    <b>M</b> or click the map to enlarge it
+  </div>
+  <canvas id="castle-map" width="380" height="380" title="Castle map (M)"></canvas>
+  <div id="castle-joy" class="castle-touch"><div id="castle-joy-knob"></div></div>
+  <button id="castle-act" class="castle-touch">Use</button>
+  <div id="castle-panel" role="dialog"></div>
+  <div id="castle-fallback">
+    <div class="card" style="max-width:440px; text-align:center;">
+      <h3>The castle couldn't load</h3>
+      <p style="color:var(--ink-dim); font-size:13px; margin-top:10px;" id="castle-fallback-msg">It needs WebGL and the Three.js library (loaded from the internet the first time).</p>
+      <div class="btn-row" style="justify-content:center; margin-top:16px;">
+        <button class="btn btn-primary btn-sm" id="castle-fallback-list">Use the station list instead</button>
+        <button class="btn btn-ghost btn-sm" id="castle-fallback-exit">Back</button>
+      </div>
+    </div>
+  </div>
+</div>
 <script>
 /* ============================================================
    MNEMOSYNE — storage, state, and view logic
@@ -448,7 +518,7 @@ function srsStatus(srs){
 }
 function getDueItems(){
   const now = Date.now();
-  const duePalaces = DB.palaces.filter(p=>p.loci.length>0 && (!p.srs || p.srs.dueAt<=now))
+  const duePalaces = DB.palaces.filter(p=>palaceHasRecallContent(p) && (!p.srs || p.srs.dueAt<=now))
     .sort((a,b)=> (a.srs?a.srs.dueAt:-Infinity) - (b.srs?b.srs.dueAt:-Infinity));
   const dueDecks = DB.decks.filter(d=>d.items.length>0 && (!d.srs || d.srs.dueAt<=now))
     .sort((a,b)=> (a.srs?a.srs.dueAt:-Infinity) - (b.srs?b.srs.dueAt:-Infinity));
@@ -484,6 +554,7 @@ async function storageSet(key, value){
 }
 async function loadDB(){
   try{ const v = await storageGet('palaces'); DB.palaces = v? JSON.parse(v): []; }catch(e){ DB.palaces = []; }
+  DB.palaces.forEach(ensureCastleLoci);
   try{ const v = await storageGet('decks'); DB.decks = v? JSON.parse(v): []; }catch(e){ DB.decks = []; }
   try{ const v = await storageGet('history'); DB.history = v? JSON.parse(v): []; }catch(e){ DB.history = []; }
   try{ const v = await storageGet('learn'); DB.learn = v? JSON.parse(v): {completed:[]}; }catch(e){ DB.learn = {completed:[]}; }
@@ -795,6 +866,7 @@ function renderDashboard(){
     </div>`;
     dueRoot.querySelectorAll('.dash-review-palace').forEach(btn=>{
       btn.addEventListener('click', ()=>{
+        if(isCastle(DB.palaces.find(p=>p.id===btn.dataset.id))){ enterCastle(btn.dataset.id, 'recall'); return; }
         openPalace(btn.dataset.id);
         startWalk('recall');
       });
@@ -842,6 +914,13 @@ function showNewPalaceModal(){
     <h3>New palace</h3>
     <p style="color:var(--ink-mute); font-size:12.5px; margin-top:2px;">Base it on somewhere you can walk through with your eyes closed.</p>
     <div class="field" style="margin-top:16px;">
+      <label class="field-label">TYPE</label>
+      <select id="np-kind">
+        <option value="list">A real place you know (you list the stations)</option>
+        <option value="castle">The 3D castle (40 stations, walk it in 3D)</option>
+      </select>
+    </div>
+    <div class="field">
       <label class="field-label">NAME</label>
       <input id="np-name" placeholder="e.g. Childhood home, Jaipur office route">
     </div>
@@ -862,40 +941,64 @@ async function createPalace(){
   const name = document.getElementById('np-name').value.trim();
   if(!name){ toast('Give the palace a name'); return; }
   const desc = document.getElementById('np-desc').value.trim();
-  const p = {id:uid(), name, description:desc, loci:[], createdAt:Date.now()};
+  const kindEl = document.getElementById('np-kind');
+  const castle = kindEl && kindEl.value==='castle';
+  const p = castle ? newCastlePalace(name, desc) : {id:uid(), name, description:desc, loci:[], createdAt:Date.now()};
   DB.palaces.unshift(p);
   await savePalaces();
   closeModal();
   renderPalaceList();
+  if(castle){ enterCastle(p.id, 'study'); return; }
   openPalace(p.id);
+}
+function castleHeroHtml(){
+  const castles = DB.palaces.filter(isCastle);
+  const filled = castles.reduce((s,p)=>s+p.loci.filter(isLocusFilled).length,0);
+  return `<div class="card castle-hero">
+    <div style="max-width:60ch;">
+      <div class="eyebrow">NEW — 3D PALACE</div>
+      <h3 style="font-size:20px;">The Castle</h3>
+      <p style="color:var(--ink-dim); font-size:13px; margin-top:6px;">Walk a robed explorer through a castle of eight rooms — courtyard, great hall, library, potions dungeon, astronomy tower and more. Leave a memory at each of 40 glowing stations, then walk the same route to recall them.</p>
+      ${castles.length ? `<div class="mono" style="font-size:11px; color:var(--ink-mute); margin-top:8px;">${castles.length} castle palace${castles.length===1?'':'s'} · ${filled} memor${filled===1?'y':'ies'} placed</div>` : ''}
+    </div>
+    <button class="btn btn-gold" id="btn-enter-castle-hero">${castles.length ? 'Enter the castle' : 'Build your castle'}</button>
+  </div>`;
 }
 function renderPalaceList(){
   const tipRoot = document.getElementById('palace-learn-tip');
   tipRoot.innerHTML = learnTipBanner('l2-1', "New to memory palaces? This one covers how to pick a route and why it works before you build one.");
   wireLearnTipButtons(tipRoot);
   const root = document.getElementById('palace-list');
+  const hero = castleHeroHtml();
   if(DB.palaces.length===0){
-    root.innerHTML = `<div class="empty"><div>No palaces yet. A palace is a route through a place you know well, broken into stations you can hang things on.</div><button class="btn btn-primary" id="empty-new-palace">+ New palace</button></div>`;
+    root.innerHTML = hero + `<div class="empty"><div>No palaces yet. A palace is a route through a place you know well, broken into stations you can hang things on.</div><button class="btn btn-primary" id="empty-new-palace">+ New palace</button></div>`;
     document.getElementById('empty-new-palace').addEventListener('click', showNewPalaceModal);
-    return;
+  } else {
+    root.innerHTML = hero + `<div class="grid grid-2">` + DB.palaces.map(p=>{
+      const filled = p.loci.filter(isLocusFilled).length;
+      const srs = srsStatus(p.srs);
+      return `<div class="card palace-card" data-id="${p.id}" style="cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div class="pill pill-blue" style="margin-bottom:10px;">${isCastle(p) ? '3D castle · ' : ''}${p.loci.length} station${p.loci.length===1?'':'s'}</div>
+          <div class="pill ${srs.due?'pill-gold':''}" style="margin-bottom:10px;">${srs.text}</div>
+        </div>
+        <h3 style="font-size:18px;">${escapeHtml(p.name)}</h3>
+        <p style="color:var(--ink-mute); font-size:12.5px; margin-top:6px;">${escapeHtml(p.description||'No description')}</p>
+        ${p.basedOn ? `<div class="pill pill-blue" style="margin-top:10px;">3D reference: ${escapeHtml(p.basedOn.name)}</div>` : ''}
+        <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+          <span style="font-size:11.5px; color:var(--ink-mute);" class="mono">${filled}/${p.loci.length} stations filled</span>
+          ${isCastle(p) ? `<button class="btn btn-sm btn-gold palace-enter-castle" data-id="${p.id}">Enter castle</button>` : ''}
+        </div>
+      </div>`;
+    }).join('') + `</div>`;
+    root.querySelectorAll('.palace-card').forEach(card=>{
+      card.addEventListener('click', ()=>openPalace(card.dataset.id));
+    });
+    root.querySelectorAll('.palace-enter-castle').forEach(btn=>{
+      btn.addEventListener('click', e=>{ e.stopPropagation(); enterCastle(btn.dataset.id, 'study'); });
+    });
   }
-  root.innerHTML = `<div class="grid grid-2">` + DB.palaces.map(p=>{
-    const filled = p.loci.filter(isLocusFilled).length;
-    const srs = srsStatus(p.srs);
-    return `<div class="card palace-card" data-id="${p.id}" style="cursor:pointer;">
-      <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
-        <div class="pill pill-blue" style="margin-bottom:10px;">${p.loci.length} station${p.loci.length===1?'':'s'}</div>
-        <div class="pill ${srs.due?'pill-gold':''}" style="margin-bottom:10px;">${srs.text}</div>
-      </div>
-      <h3 style="font-size:18px;">${escapeHtml(p.name)}</h3>
-      <p style="color:var(--ink-mute); font-size:12.5px; margin-top:6px;">${escapeHtml(p.description||'No description')}</p>
-      ${p.basedOn ? `<div class="pill pill-blue" style="margin-top:10px;">3D reference: ${escapeHtml(p.basedOn.name)}</div>` : ''}
-      <div style="margin-top:14px; font-size:11.5px; color:var(--ink-mute);" class="mono">${filled}/${p.loci.length} stations filled</div>
-    </div>`;
-  }).join('') + `</div>`;
-  root.querySelectorAll('.palace-card').forEach(card=>{
-    card.addEventListener('click', ()=>openPalace(card.dataset.id));
-  });
+  document.getElementById('btn-enter-castle-hero').addEventListener('click', ()=>openOrCreateCastle('study'));
 }
 let currentPalaceId = null;
 function getCurrentPalace(){ return DB.palaces.find(x=>x.id===currentPalaceId); }
@@ -913,6 +1016,9 @@ function openPalace(id){
     if(PALACE_CATALOG.find(r=>r.id===p.basedOn.catalogId)) current3DRoom = p.basedOn.catalogId;
     open3DExplore();
   });
+  const castle = isCastle(p);
+  document.getElementById('btn-enter-castle').style.display = castle ? '' : 'none';
+  document.getElementById('btn-add-locus').style.display = castle ? 'none' : '';
   go('palace-detail','palaces');
   renderLociList();
 }
@@ -968,11 +1074,11 @@ function renderLociList(){
           <span class="locus-photo-status" style="font-size:11px; color:var(--ink-mute);"></span>
         </div>
       </div>
-      <div style="display:flex; flex-direction:column; gap:6px;">
+      ${isCastle(p) ? '' : `<div style="display:flex; flex-direction:column; gap:6px;">
         <button class="btn btn-sm btn-ghost locus-up" title="Move up">\u2191</button>
         <button class="btn btn-sm btn-ghost locus-down" title="Move down">\u2193</button>
         <button class="btn btn-sm btn-danger locus-del">\u2715</button>
-      </div>
+      </div>`}
     </div>
   `).join('');
   root.querySelectorAll('.locus-row').forEach(row=>{
@@ -990,9 +1096,11 @@ function renderLociList(){
       const l = getCurrentPalace().loci.find(x=>x.id===id);
       updateLocus(id,{content:{text:e.target.value, source:(l.content&&l.content.source)||null}});
     });
-    row.querySelector('.locus-up').addEventListener('click', ()=>moveLocus(id,-1));
-    row.querySelector('.locus-down').addEventListener('click', ()=>moveLocus(id,1));
-    row.querySelector('.locus-del').addEventListener('click', ()=>removeLocus(id));
+    if(!isCastle(p)){
+      row.querySelector('.locus-up').addEventListener('click', ()=>moveLocus(id,-1));
+      row.querySelector('.locus-down').addEventListener('click', ()=>moveLocus(id,1));
+      row.querySelector('.locus-del').addEventListener('click', ()=>removeLocus(id));
+    }
     const photoInput = row.querySelector('.locus-photo-input');
     const statusEl = row.querySelector('.locus-photo-status');
     photoInput.addEventListener('change', async e=>{
@@ -1052,8 +1160,10 @@ async function deletePalace(){
 let walkState = null;
 function startWalk(mode){
   const p = getCurrentPalace(); if(!p) return;
-  if(mode==='recall' && p.loci.length===0){ toast('Add stations first'); return; }
-  walkState = { mode, palace:p, idx:0, marks:[], revealed:undefined };
+  if(mode==='recall' && !palaceHasRecallContent(p)){ toast(isCastle(p) ? 'Leave a memory at a station first' : 'Add stations first'); return; }
+  // A castle has 40 fixed stations; recall only walks the ones holding something.
+  const palace = (mode==='recall' && isCastle(p)) ? Object.assign({}, p, {loci: p.loci.filter(isLocusFilled)}) : p;
+  walkState = { mode, palace, idx:0, marks:[], revealed:undefined };
   renderWalk();
 }
 function renderWalk(){
@@ -1113,7 +1223,7 @@ function renderWalk(){
           <button class="btn btn-sm" style="border-color:var(--red); color:var(--red);" id="wk-wrong">Missed it</button>
         ` : `<button class="btn btn-primary btn-sm" id="wk-reveal">Reveal</button>`}
       </div>
-    ` : `
+    ` : isCastle(palace) ? '' : `
       <div class="btn-row" style="margin-top:12px;">
         <button class="btn btn-sm btn-ghost" id="wk-add-station">+ New station here</button>
       </div>
@@ -1196,6 +1306,7 @@ async function finishWalk(){
   walkState = null;
 }
 function wirePalaceDetailButtons(){
+  document.getElementById('btn-enter-castle').addEventListener('click', ()=>enterCastle(currentPalaceId, 'study'));
   document.getElementById('btn-walk-study').addEventListener('click', ()=>startWalk('study'));
   document.getElementById('btn-walk-recall').addEventListener('click', ()=>startWalk('recall'));
   document.getElementById('btn-add-locus').addEventListener('click', addLocus);
@@ -1310,6 +1421,118 @@ function open3DExplore(){
 function wire3DExploreButtons(){
   document.getElementById('btn-explore-3d').addEventListener('click', open3DExplore);
   document.getElementById('btn-back-3d').addEventListener('click', ()=>{ go('palaces','palaces'); renderPalaceList(); });
+}
+
+/* ---- The Castle: a generated 3D palace (rendered by the castle engine
+   script further down). Layout lives here so the data layer works
+   without WebGL. Grid is in tiles of CASTLE_TILE world units; rooms and
+   doors are inclusive tile rectangles. Stations are listed in route
+   order; x/z are world coords of the prop, face is the direction the
+   prop faces into the room (its glowing circle sits on that side). ---- */
+const CASTLE_TILE = 2;
+const CASTLE_GRID_W = 34, CASTLE_GRID_H = 31;
+const CASTLE_ROOMS = [
+  { id:'courtyard', name:'Courtyard',        x0:12, z0:22, x1:21, z1:29, floor:'flag',   sky:true,  light:0xa9b8ff },
+  { id:'entrance',  name:'Entrance Hall',    x0:12, z0:14, x1:21, z1:20, floor:'marble',            light:0xffc27a },
+  { id:'hall',      name:'Great Hall',       x0:1,  z0:8,  x1:10, z1:20, floor:'wood',   sky:true,  light:0xffb35c },
+  { id:'gallery',   name:'Portrait Gallery', x0:1,  z0:1,  x1:10, z1:6,  floor:'carpet',            light:0xffd7a0 },
+  { id:'library',   name:'Library',          x0:12, z0:1,  x1:21, z1:11, floor:'wood2',             light:0xffcf8a },
+  { id:'dungeon',   name:'Potions Dungeon',  x0:23, z0:1,  x1:32, z1:8,  floor:'dark',              light:0x5cff8c },
+  { id:'armoury',   name:'Armoury',          x0:23, z0:10, x1:32, z1:17, floor:'flag2',             light:0xff8a52 },
+  { id:'tower',     name:'Astronomy Tower',  x0:23, z0:19, x1:32, z1:27, floor:'tile',   sky:true,  light:0x9aa8ff }
+];
+const CASTLE_DOORS = [
+  { x0:16, z0:21, x1:17, z1:21 }, { x0:11, z0:17, x1:11, z1:18 }, { x0:2, z0:7, x1:3, z1:7 },
+  { x0:11, z0:3, x1:11, z1:4 },   { x0:22, z0:4, x1:22, z1:5 },   { x0:27, z0:9, x1:28, z1:9 },
+  { x0:27, z0:18, x1:28, z1:18 }, { x0:22, z0:24, x1:22, z1:25 }
+];
+const CASTLE_START = { x:34, z:54.4, yaw:0 };
+const CASTLE_STATIONS = [
+  ['courtyard','Iron gate','gate',34,59.2,'n'],
+  ['courtyard','Stone fountain','fountain',28.5,53,'e'],
+  ['courtyard','Old oak tree','tree',27,47,'e'],
+  ['courtyard','Broomstick rack','brooms',43.3,56,'w'],
+  ['courtyard','Sundial','sundial',39,47.5,'w'],
+  ['entrance','Four great hourglasses','hourglasses',43.1,38.5,'w'],
+  ['entrance','Grandfather clock','clock',43.3,31,'w'],
+  ['entrance','Grand staircase','staircase',34,29.6,'s'],
+  ['entrance','Suit of armour','armour',25,30.5,'e'],
+  ['entrance','Portrait of a knight','knightportrait',24.3,40,'e'],
+  ['hall','Old hat on a stool','hat',18,37,'w'],
+  ['hall','Long table set with goblets','longtable',12,31,'e'],
+  ['hall','Roaring fireplace','fireplace',2.7,26,'e'],
+  ['hall','Golden owl lectern','lectern',13,23,'s'],
+  ['hall','High-backed throne','throne',13,17.8,'s'],
+  ['gallery','Tall gilded mirror','mirror',2.5,8,'e'],
+  ['gallery','Portrait of a lady','ladyportrait',8,2.3,'s'],
+  ['gallery','Dragon tapestry','tapestry',15,2.3,'s'],
+  ['gallery','Great blue vase','vase',20.6,3.6,'s'],
+  ['gallery','Marble bust','bust',15,11.6,'n'],
+  ['library','Towering bookshelf','bookshelf',24.6,15,'e'],
+  ['library','Reading desk with a candle','desk',30,19,'n'],
+  ['library','Chained restricted bookcase','chained',36,23.4,'n'],
+  ['library','Giant globe','globe',41,17,'w'],
+  ['library','Armchair and lamp','armchair',40,4.5,'s'],
+  ['dungeon','Shelf of potion bottles','potions',51,2.6,'s'],
+  ['dungeon','Bubbling cauldron','cauldron',57,8,'s'],
+  ['dungeon','Stack of barrels','barrels',63.6,4.4,'w'],
+  ['dungeon','Workbench with brass scales','scales',65.2,13,'w'],
+  ['dungeon','Skeleton in a cage','cage',49.5,15,'n'],
+  ['armoury','Trophy cabinet','trophies',65.3,23.5,'w'],
+  ['armoury','Shield and crossed swords','shield',46.4,23.5,'e'],
+  ['armoury','Rack of spears','spears',46.6,31,'e'],
+  ['armoury','Treasure chest','chest',51,34.8,'n'],
+  ['armoury','Bronze cannon','cannon',61,33,'n'],
+  ['tower','Brass telescope','telescope',62.5,42,'w'],
+  ['tower','Star chart table','starchart',62,50,'w'],
+  ['tower','Planet orrery','orrery',56,53,'n'],
+  ['tower','Crystal ball','crystal',50,53,'n'],
+  ['tower','Armillary sphere','armillary',51,43,'e']
+].map((s,i)=>({ id:'s'+String(i+1).padStart(2,'0'), n:i+1, room:s[0], title:s[1], prop:s[2], x:s[3], z:s[4], face:s[5] }));
+
+function castleRoomName(id){ const r = CASTLE_ROOMS.find(r=>r.id===id); return r ? r.name : ''; }
+function isCastle(p){ return !!(p && p.kind==='castle'); }
+function castleStationForLocus(l){ return l && CASTLE_STATIONS.find(s=>s.id===l.anchor); }
+function castleLocusTitle(s){ return `${s.title} — ${castleRoomName(s.room)}`; }
+function newCastlePalace(name, description){
+  return { id:uid(), kind:'castle', name: name || 'The Castle', description: description || 'A 3D castle with 40 stations along one fixed route.',
+    loci: CASTLE_STATIONS.map(s=>({ id:uid(), anchor:s.id, title:castleLocusTitle(s), content:null, image:null })), createdAt:Date.now() };
+}
+// Keeps a saved castle palace in step with the station list (route order, every anchor present).
+function ensureCastleLoci(p){
+  if(!isCastle(p)) return false;
+  const byAnchor = {};
+  p.loci.forEach(l=>{ if(l.anchor && !byAnchor[l.anchor]) byAnchor[l.anchor] = l; });
+  const next = CASTLE_STATIONS.map(s=>byAnchor[s.id] || { id:uid(), anchor:s.id, title:castleLocusTitle(s), content:null, image:null });
+  const changed = next.length!==p.loci.length || next.some((l,i)=>l!==p.loci[i]);
+  p.loci = next;
+  return changed;
+}
+function palaceHasRecallContent(p){
+  return isCastle(p) ? p.loci.some(isLocusFilled) : p.loci.length>0;
+}
+// items: [{text, source}]. Castle stations are fixed, so castles always fill empty stations in route order.
+function placeItemsInPalace(palace, items, mode){
+  let placed = 0;
+  if(mode==='append' && !isCastle(palace)){
+    items.forEach(it=>{ palace.loci.push({id:uid(), title:'', content:{text:it.text, source:it.source}}); placed++; });
+  } else {
+    const emptySlots = palace.loci.filter(l=>!l.content || !l.content.text);
+    for(let i=0;i<items.length && i<emptySlots.length;i++){
+      emptySlots[i].content = {text:items[i].text, source:items[i].source};
+      placed++;
+    }
+  }
+  return placed;
+}
+async function openOrCreateCastle(mode){
+  let p = DB.palaces.find(isCastle);
+  if(!p){
+    p = newCastlePalace();
+    DB.palaces.unshift(p);
+    await savePalaces();
+  }
+  enterCastle(p.id, mode || 'study');
 }
 
 /* ---- Number systems: Major System (defaults + overrides) and PAO
@@ -1753,7 +1976,7 @@ function showAssignModal(){
     <h3>Send "${escapeHtml(d.title)}" to a palace</h3>
     <div class="field" style="margin-top:14px;">
       <label class="field-label">PALACE</label>
-      <select id="am-palace">${DB.palaces.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (${p.loci.length} stations)</option>`).join('')}</select>
+      <select id="am-palace">${DB.palaces.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (${isCastle(p) ? `3D castle — ${p.loci.filter(l=>!isLocusFilled(l)).length} empty stations, filled in route order` : `${p.loci.length} stations`})</option>`).join('')}</select>
     </div>
     <div class="field">
       <label class="field-label">HOW</label>
@@ -1784,19 +2007,10 @@ function showAssignModal(){
     const mode = document.getElementById('am-mode').value;
     const itemsToSend = (markedCheckbox && markedCheckbox.checked) ? d.items.filter(it=>it.marked) : d.items;
     if(itemsToSend.length===0){ toast('Nothing to send \u2014 mark a few items first'); return; }
-    let placed = 0;
-    if(mode==='append'){
-      itemsToSend.forEach(it=>{ palace.loci.push({id:uid(), title:'', content:{text:it.text, source:d.title}}); placed++; });
-    } else {
-      const emptySlots = palace.loci.filter(l=>!l.content || !l.content.text);
-      for(let i=0;i<itemsToSend.length && i<emptySlots.length;i++){
-        emptySlots[i].content = {text:itemsToSend[i].text, source:d.title};
-        placed++;
-      }
-    }
+    const placed = placeItemsInPalace(palace, itemsToSend.map(it=>({text:it.text, source:d.title})), mode);
     await savePalaces();
     closeModal();
-    toast(placed>0 ? `Placed ${placed} item(s) in ${palace.name}` : 'No empty stations available \u2014 try "add as new stations" instead');
+    toast(placed>0 ? `Placed ${placed} item(s) in ${palace.name}` : (isCastle(palace) ? 'Every castle station is already holding something' : 'No empty stations available \u2014 try "add as new stations" instead'));
   });
 }
 
@@ -1823,7 +2037,7 @@ function showAssignMarkedModal(){
     <p style="color:var(--ink-mute); font-size:12.5px; margin-top:2px;">From across ${new Set(marked.map(m=>m.deckId)).size} deck${new Set(marked.map(m=>m.deckId)).size===1?'':'s'} \u2014 each item becomes its own station.</p>
     <div class="field" style="margin-top:14px;">
       <label class="field-label">PALACE</label>
-      <select id="amm-palace">${DB.palaces.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (${p.loci.length} stations)</option>`).join('')}</select>
+      <select id="amm-palace">${DB.palaces.map(p=>`<option value="${p.id}">${escapeHtml(p.name)} (${isCastle(p) ? `3D castle — ${p.loci.filter(l=>!isLocusFilled(l)).length} empty stations, filled in route order` : `${p.loci.length} stations`})</option>`).join('')}</select>
     </div>
     <div class="field">
       <label class="field-label">HOW</label>
@@ -1841,16 +2055,7 @@ function showAssignMarkedModal(){
   document.getElementById('amm-go').addEventListener('click', async ()=>{
     const palace = DB.palaces.find(x=>x.id===document.getElementById('amm-palace').value);
     const mode = document.getElementById('amm-mode').value;
-    let placed = 0;
-    if(mode==='append'){
-      marked.forEach(m=>{ palace.loci.push({id:uid(), title:'', content:{text:m.text, source:m.deckTitle}}); placed++; });
-    } else {
-      const emptySlots = palace.loci.filter(l=>!l.content || !l.content.text);
-      for(let i=0;i<marked.length && i<emptySlots.length;i++){
-        emptySlots[i].content = {text:marked[i].text, source:marked[i].deckTitle};
-        placed++;
-      }
-    }
+    const placed = placeItemsInPalace(palace, marked.map(m=>({text:m.text, source:m.deckTitle})), mode);
     await savePalaces();
     closeModal();
     toast(placed>0 ? `Placed ${placed} marked item(s) in ${palace.name}, each in its own station` : 'No empty stations available \u2014 try "add as new stations" instead');
@@ -2320,6 +2525,1418 @@ async function init(){
 }
 window.addEventListener('DOMContentLoaded', init);
 
+</script>
+<script>
+/* ============================================================
+   CASTLE ENGINE — Three.js scene, character, controls, HUD.
+   Everything is generated from primitives and canvas textures, so
+   there are no model files or third-party embeds that can break.
+   ============================================================ */
+const castleEngine = (function(){
+  const T = CASTLE_TILE, WALL_H = 7, PLAYER_R = 0.42, INTERACT_R = 1.5;
+  const FACE_YAW = { s:0, e:Math.PI/2, n:Math.PI, w:-Math.PI/2 };
+  const FACE_VEC = { s:[0,1], e:[1,0], n:[0,-1], w:[-1,0] };
+
+  /* ---------- grid (pure data, no WebGL needed) ---------- */
+  // cell value: room index >=0, -2 doorway, -1 solid wall
+  const grid = new Int8Array(CASTLE_GRID_W*CASTLE_GRID_H).fill(-1);
+  CASTLE_ROOMS.forEach((r,i)=>{ for(let z=r.z0; z<=r.z1; z++) for(let x=r.x0; x<=r.x1; x++) grid[z*CASTLE_GRID_W+x] = i; });
+  CASTLE_DOORS.forEach(d=>{ for(let z=d.z0; z<=d.z1; z++) for(let x=d.x0; x<=d.x1; x++) grid[z*CASTLE_GRID_W+x] = -2; });
+  function cellAt(tx, tz){
+    if(tx<0 || tz<0 || tx>=CASTLE_GRID_W || tz>=CASTLE_GRID_H) return -1;
+    return grid[tz*CASTLE_GRID_W+tx];
+  }
+  function cellAtWorld(wx, wz){ return cellAt(Math.floor(wx/T), Math.floor(wz/T)); }
+  function walkable(wx, wz){ return cellAtWorld(wx, wz)!==-1; }
+  function roomAtWorld(wx, wz){ const c = cellAtWorld(wx, wz); return c>=0 ? CASTLE_ROOMS[c] : null; }
+  function ringPos(s){
+    const meta = PROP_META[s.prop] || {};
+    const v = FACE_VEC[s.face], off = meta.ring || 1.6;
+    return { x: s.x + v[0]*off, z: s.z + v[1]*off };
+  }
+
+  /* ---------- state ---------- */
+  let THREE_OK = false, built = false, running = false, raf = 0;
+  let renderer, scene, camera, clock, canvasWrap;
+  let palaceId = null, mode = 'study';
+  let recall = null;           // {order:[locus idx], pos, marks:[], revealed}
+  let panelStation = -1;       // station index whose panel is open
+  let mapBig = false;
+  const keys = {};
+  const input = { joyX:0, joyZ:0 };
+  const P = { x:CASTLE_START.x, z:CASTLE_START.z, yaw:CASTLE_START.yaw, walkPhase:0, speed:0 };
+  const cam = { yaw:0, pitch:0.32, dist:5.2, curDist:5.2 };
+  const stationViews = [];     // per station: {group, ring, ringMat, badge, card, orb, photo, ring pos}
+  const animated = [];         // functions(t, dt) run every frame
+  const colliders = [];        // {x, z, r}
+
+  /* ---------- canvas textures ---------- */
+  function canvasTex(size, draw, repeatX, repeatY){
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const g = c.getContext('2d'); draw(g, size);
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeatX||1, repeatY||1);
+    t.anisotropy = 4;
+    return t;
+  }
+  function rand(seed){ let s = seed>>>0; return ()=>{ s = (s*1664525 + 1013904223)>>>0; return s/4294967296; }; }
+  function noise(g, size, alpha, seed){
+    const r = rand(seed||7);
+    for(let i=0;i<size*size/18;i++){
+      const v = Math.floor(r()*255);
+      g.fillStyle = `rgba(${v},${v},${v},${alpha})`;
+      g.fillRect(r()*size, r()*size, 2, 2);
+    }
+  }
+  function bricks(base, mortar, rows, cols, seed){
+    return (g,s)=>{
+      g.fillStyle = mortar; g.fillRect(0,0,s,s);
+      const r = rand(seed), bh = s/rows, bw = s/cols;
+      for(let y=0;y<rows;y++){
+        const off = (y%2) ? bw/2 : 0;
+        for(let x=-1;x<=cols;x++){
+          const shade = 0.82 + r()*0.3;
+          const c = base.map(v=>Math.min(255, Math.round(v*shade)));
+          g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+          g.fillRect(x*bw+off+2, y*bh+2, bw-4, bh-4);
+        }
+      }
+      noise(g, s, 0.08, seed+1);
+    };
+  }
+  function planks(base, seed){
+    return (g,s)=>{
+      const r = rand(seed), n = 6, w = s/n;
+      for(let i=0;i<n;i++){
+        const shade = 0.8 + r()*0.35;
+        const c = base.map(v=>Math.min(255, Math.round(v*shade)));
+        g.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`; g.fillRect(i*w, 0, w, s);
+        g.fillStyle = 'rgba(0,0,0,.35)'; g.fillRect(i*w, 0, 2, s);
+        const cut = r()*s; g.fillRect(i*w, cut, w, 2);
+        g.strokeStyle = 'rgba(0,0,0,.12)';
+        for(let k=0;k<5;k++){ g.beginPath(); const xx = i*w + r()*w; g.moveTo(xx,0); g.bezierCurveTo(xx+6, s*.3, xx-6, s*.6, xx+3, s); g.stroke(); }
+      }
+    };
+  }
+  function checker(a, b){
+    return (g,s)=>{
+      const n = 2, w = s/n;
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++){ g.fillStyle = (x+y)%2 ? a : b; g.fillRect(x*w, y*w, w, w); }
+      g.strokeStyle = 'rgba(0,0,0,.25)'; g.lineWidth = 2;
+      for(let i=0;i<=n;i++){ g.beginPath(); g.moveTo(i*w,0); g.lineTo(i*w,s); g.moveTo(0,i*w); g.lineTo(s,i*w); g.stroke(); }
+      noise(g, s, 0.05, 3);
+    };
+  }
+  function carpet(g, s){
+    g.fillStyle = '#6b1d22'; g.fillRect(0,0,s,s);
+    g.strokeStyle = '#c99a3a'; g.lineWidth = 6; g.strokeRect(14,14,s-28,s-28);
+    g.lineWidth = 2; g.strokeRect(26,26,s-52,s-52);
+    g.fillStyle = '#8a2a30';
+    g.beginPath(); g.moveTo(s/2, 46); g.lineTo(s-46, s/2); g.lineTo(s/2, s-46); g.lineTo(46, s/2); g.closePath(); g.fill();
+    g.fillStyle = '#c99a3a'; g.beginPath(); g.arc(s/2, s/2, 12, 0, Math.PI*2); g.fill();
+    noise(g, s, 0.06, 11);
+  }
+  let TEX = null;
+  function makeTextures(){
+    TEX = {
+      wall:   canvasTex(256, bricks([118,112,104], '#3e3a36', 8, 4, 21), 1, 3.5),
+      flag:   canvasTex(256, bricks([112,116,104], '#3a3c34', 3, 3, 5)),
+      flag2:  canvasTex(256, bricks([120,96,82], '#3b2c26', 3, 2, 9)),
+      dark:   canvasTex(256, bricks([58,66,58], '#1d221d', 4, 4, 13)),
+      marble: canvasTex(256, checker('#d9d3c4', '#2b2b30')),
+      tile:   canvasTex(256, checker('#5b6a8c', '#2c3550')),
+      wood:   canvasTex(256, planks([122,80,46], 17)),
+      wood2:  canvasTex(256, planks([92,58,34], 19)),
+      carpet: canvasTex(256, carpet),
+      ceil:   canvasTex(256, planks([60,42,28], 23)),
+      grass:  canvasTex(128, (g,s)=>{ g.fillStyle='#38512c'; g.fillRect(0,0,s,s); const r=rand(4); for(let i=0;i<600;i++){ g.fillStyle=`rgba(${60+r()*60|0},${100+r()*70|0},${40+r()*30|0},.8)`; g.fillRect(r()*s, r()*s, 1.5, 4); } })
+    };
+  }
+  function skyTexture(){
+    return canvasTex(1024, (g,s)=>{
+      const grad = g.createLinearGradient(0,0,0,s);
+      grad.addColorStop(0,'#05060c'); grad.addColorStop(0.45,'#0b1024'); grad.addColorStop(0.5,'#1a2040'); grad.addColorStop(1,'#05060c');
+      g.fillStyle = grad; g.fillRect(0,0,s,s);
+      const r = rand(99);
+      for(let i=0;i<1600;i++){
+        const y = r()*s*0.5, a = 0.3 + r()*0.7, rad = r()<0.04 ? 1.6 : 0.8;
+        g.fillStyle = `rgba(255,${235+r()*20|0},${210+r()*45|0},${a})`;
+        g.beginPath(); g.arc(r()*s, y, rad, 0, Math.PI*2); g.fill();
+      }
+    });
+  }
+  function glowTexture(color){
+    return canvasTex(64, (g,s)=>{
+      const gr = g.createRadialGradient(s/2,s/2,0,s/2,s/2,s/2);
+      gr.addColorStop(0, color); gr.addColorStop(0.35, color.replace(/[\d.]+\)$/, '0.35)')); gr.addColorStop(1,'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(0,0,s,s);
+    });
+  }
+
+  /* ---------- small mesh helpers ---------- */
+  const matCache = {};
+  function mat(color, opts){
+    const key = color + JSON.stringify(opts||{});
+    if(!matCache[key]) matCache[key] = new THREE.MeshLambertMaterial(Object.assign({ color }, opts||{}));
+    return matCache[key];
+  }
+  function glowMat(color){ return mat(color, { emissive: color, emissiveIntensity: 1 }); }
+  function box(w,h,d,m,x,y,z){ const o = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), m); o.position.set(x||0,y||0,z||0); return o; }
+  function cyl(rt,rb,h,m,x,y,z,seg){ const o = new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||14), m); o.position.set(x||0,y||0,z||0); return o; }
+  function sph(r,m,x,y,z,ws,hs){ const o = new THREE.Mesh(new THREE.SphereGeometry(r, ws||16, hs||12), m); o.position.set(x||0,y||0,z||0); return o; }
+  function cone(r,h,m,x,y,z,seg){ const o = new THREE.Mesh(new THREE.ConeGeometry(r,h,seg||14), m); o.position.set(x||0,y||0,z||0); return o; }
+  function torus(r,t,m,x,y,z,arc){ const o = new THREE.Mesh(new THREE.TorusGeometry(r,t,8,32,arc||Math.PI*2), m); o.position.set(x||0,y||0,z||0); return o; }
+  function group(...kids){ const g = new THREE.Group(); kids.forEach(k=>k && g.add(k)); return g; }
+  function rotY(o, a){ o.rotation.y = a; return o; }
+  function rotX(o, a){ o.rotation.x = a; return o; }
+  function rotZ(o, a){ o.rotation.z = a; return o; }
+  function glowSprite(color, size){
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(color), blending: THREE.AdditiveBlending, depthWrite:false, transparent:true }));
+    sp.scale.set(size, size, 1);
+    return sp;
+  }
+  function flame(size){
+    const g = group(cone(0.07*size, 0.22*size, glowMat(0xffa030), 0, 0.11*size, 0, 8), glowSprite('rgba(255,170,70,1)', 0.9*size));
+    g.children[1].position.y = 0.12*size;
+    const phase = Math.random()*10;
+    animated.push(t=>{ const f = 1 + Math.sin(t*13+phase)*0.08 + Math.sin(t*7.3+phase)*0.06; g.scale.set(f, f*1.05, f); });
+    return g;
+  }
+
+  /* ---------- the building ---------- */
+  function buildShell(){
+    // walls: one instanced box per wall cell that touches open floor
+    const wallCells = [];
+    for(let z=0; z<CASTLE_GRID_H; z++) for(let x=0; x<CASTLE_GRID_W; x++){
+      if(cellAt(x,z)!==-1) continue;
+      let touches = false;
+      for(let dz=-1; dz<=1 && !touches; dz++) for(let dx=-1; dx<=1; dx++) if(cellAt(x+dx, z+dz)!==-1){ touches = true; break; }
+      if(touches) wallCells.push([x,z]);
+    }
+    const wallGeo = new THREE.BoxGeometry(T, WALL_H, T, 2, 6, 2);
+    const walls = new THREE.InstancedMesh(wallGeo, new THREE.MeshLambertMaterial({ map: TEX.wall }), wallCells.length);
+    const m4 = new THREE.Matrix4();
+    wallCells.forEach(([x,z],i)=>{ m4.makeTranslation(x*T+T/2, WALL_H/2, z*T+T/2); walls.setMatrixAt(i, m4); });
+    scene.add(walls);
+    // battlements along the top of walls that border open-sky rooms
+    const merlonGeo = new THREE.BoxGeometry(0.7, 0.8, 0.7);
+    const merlonCells = wallCells.filter(([x,z])=>{
+      for(let dz=-1; dz<=1; dz++) for(let dx=-1; dx<=1; dx++){ const c = cellAt(x+dx, z+dz); if(c>=0 && CASTLE_ROOMS[c].sky) return true; }
+      return false;
+    });
+    const merlons = new THREE.InstancedMesh(merlonGeo, new THREE.MeshLambertMaterial({ map: TEX.wall }), merlonCells.length*2);
+    merlonCells.forEach(([x,z],i)=>{
+      m4.makeTranslation(x*T+0.5, WALL_H+0.4, z*T+0.5); merlons.setMatrixAt(i*2, m4);
+      m4.makeTranslation(x*T+1.5, WALL_H+0.4, z*T+1.5); merlons.setMatrixAt(i*2+1, m4);
+    });
+    scene.add(merlons);
+
+    // floors: one instanced tile mesh per floor material
+    const floorGeo = new THREE.PlaneGeometry(T, T, 2, 2); floorGeo.rotateX(-Math.PI/2);
+    const byFloor = {};
+    for(let z=0; z<CASTLE_GRID_H; z++) for(let x=0; x<CASTLE_GRID_W; x++){
+      const c = cellAt(x,z); if(c===-1) continue;
+      const key = c>=0 ? CASTLE_ROOMS[c].floor : 'flag2';
+      (byFloor[key] = byFloor[key] || []).push([x,z]);
+    }
+    Object.keys(byFloor).forEach(key=>{
+      const cells = byFloor[key];
+      const mesh = new THREE.InstancedMesh(floorGeo, new THREE.MeshLambertMaterial({ map: TEX[key] }), cells.length);
+      cells.forEach(([x,z],i)=>{ m4.makeTranslation(x*T+T/2, 0, z*T+T/2); mesh.setMatrixAt(i, m4); });
+      scene.add(mesh);
+    });
+
+    // ceilings for covered rooms, sky dome for the open ones
+    CASTLE_ROOMS.forEach(r=>{
+      if(r.sky) return;
+      const w = (r.x1-r.x0+1)*T, d = (r.z1-r.z0+1)*T;
+      const tex = TEX.ceil.clone(); tex.needsUpdate = true; tex.repeat.set(w/4, d/4);
+      const ceil = new THREE.Mesh(new THREE.PlaneGeometry(w, d, 4, 4), new THREE.MeshLambertMaterial({ map: tex }));
+      ceil.rotation.x = Math.PI/2;
+      ceil.position.set(r.x0*T + w/2, WALL_H, r.z0*T + d/2);
+      scene.add(ceil);
+      for(let i=1;i<d/4;i++) scene.add(box(w, 0.35, 0.3, mat(0x3a2818), r.x0*T + w/2, WALL_H-0.18, r.z0*T + i*4));
+    });
+    const sky = new THREE.Mesh(new THREE.SphereGeometry(220, 32, 16), new THREE.MeshBasicMaterial({ map: skyTexture(), side: THREE.BackSide, fog:false }));
+    sky.position.set(34, 0, 30);
+    scene.add(sky);
+    const moon = sph(6, new THREE.MeshBasicMaterial({ color: 0xf3ecd2, fog:false }), -40, 110, -120);
+    scene.add(moon);
+
+    // door lintels so doorways read as arches
+    CASTLE_DOORS.forEach(d=>{
+      const x0 = d.x0*T, x1 = (d.x1+1)*T, z0 = d.z0*T, z1 = (d.z1+1)*T;
+      const lintelH = WALL_H - 3.8;
+      scene.add(box(x1-x0, lintelH, z1-z0, new THREE.MeshLambertMaterial({ map: TEX.wall }), (x0+x1)/2, 3.8 + lintelH/2, (z0+z1)/2));
+      const alongX = (x1-x0) > (z1-z0);
+      const span = alongX ? x1-x0 : z1-z0;
+      const arch = torus(span/2, 0.12, mat(0xb08d4a), (x0+x1)/2, 3.8, (z0+z1)/2, Math.PI);
+      if(!alongX) arch.rotation.y = Math.PI/2;
+      arch.scale.y = 0.45;
+      scene.add(arch);
+    });
+
+    // lights: one warm light per room plus soft sky fill
+    scene.add(new THREE.HemisphereLight(0x8890b8, 0x2a2018, 0.55));
+    scene.add(new THREE.AmbientLight(0xffffff, 0.12));
+    const moonLight = new THREE.DirectionalLight(0x8899ff, 0.35); moonLight.position.set(-40, 110, -120); scene.add(moonLight);
+    CASTLE_ROOMS.forEach(r=>{
+      const cx = (r.x0 + r.x1 + 1)/2*T, cz = (r.z0 + r.z1 + 1)/2*T;
+      const span = Math.max(r.x1-r.x0+1, r.z1-r.z0+1)*T;
+      const l = new THREE.PointLight(r.light, 1.25, span*1.25, 1);
+      l.position.set(cx, 5.2, cz);
+      scene.add(l);
+      const phase = Math.random()*10;
+      animated.push(t=>{ l.intensity = 1.2 + Math.sin(t*3.1+phase)*0.04 + Math.sin(t*7.7+phase)*0.03; });
+    });
+    buildTorches();
+  }
+  function buildTorches(){
+    CASTLE_ROOMS.forEach(r=>{
+      const midX = Math.floor((r.x0+r.x1)/2), midZ = Math.floor((r.z0+r.z1)/2);
+      const spots = [
+        [midX, r.z0-1, 0, 1], [midX, r.z1+1, 0, -1], [r.x0-1, midZ, 1, 0], [r.x1+1, midZ, -1, 0]
+      ];
+      spots.forEach(([tx,tz,dx,dz])=>{
+        if(cellAt(tx,tz)!==-1) return;
+        // torch sits on the wall face, offset into the room
+        const wx = tx*T + T/2 + dx*(T/2+0.12), wz = tz*T + T/2 + dz*(T/2+0.12);
+        const holder = group(cyl(0.05,0.04,0.5, mat(0x3a2a1a), 0, 0, 0, 8), cyl(0.09,0.05,0.12, mat(0x5a4a3a), 0, 0.28, 0, 8));
+        const f = flame(1); f.position.y = 0.36; holder.add(f);
+        holder.position.set(wx, 2.9, wz);
+        holder.rotation.x = dz*0.35; holder.rotation.z = -dx*0.35;
+        scene.add(holder);
+      });
+    });
+  }
+
+  /* ---------- props: one distinct object per station ----------
+     Local frame: the prop stands on y=0, its front faces +z.
+     r = collision radius, cols = extra local collision circles,
+     ring = distance of the glowing circle in front, h = label height. */
+  const PROP_META = {
+    gate:{r:0.6, ring:2.0, h:5.2}, fountain:{r:1.45, ring:2.3, h:3.0}, tree:{r:0.7, ring:1.9, h:5.4},
+    brooms:{r:0.5, ring:1.5, h:2.8}, sundial:{r:0.6, ring:1.4, h:2.2}, hourglasses:{r:0.8, ring:1.8, h:3.4},
+    clock:{r:0.5, ring:1.5, h:3.4}, staircase:{r:0, cols:[[-2.2,-0.2,1.4],[0,-0.2,1.4],[2.2,-0.2,1.4]], ring:2.7, h:4.8},
+    armour:{r:0.5, ring:1.4, h:2.9}, knightportrait:{r:0.3, ring:1.6, h:4.2}, hat:{r:0.5, ring:1.3, h:2.2},
+    longtable:{r:0, cols:[[-2.6,0,1.3],[0,0,1.3],[2.6,0,1.3]], ring:2.4, h:2.4}, fireplace:{r:0, cols:[[0,-0.1,1.2]], ring:2.0, h:4.4},
+    lectern:{r:0.5, ring:1.4, h:2.7}, throne:{r:1.0, ring:2.0, h:4.3}, mirror:{r:0.3, ring:1.6, h:4.0},
+    ladyportrait:{r:0.3, ring:1.6, h:4.0}, tapestry:{r:0.2, ring:1.6, h:5.0}, vase:{r:0.6, ring:1.4, h:2.7},
+    bust:{r:0.5, ring:1.4, h:2.7}, bookshelf:{r:0, cols:[[-0.8,0,0.55],[0.8,0,0.55]], ring:1.6, h:4.6},
+    desk:{r:0.9, ring:1.6, h:2.4}, chained:{r:0, cols:[[-0.8,0,0.55],[0.8,0,0.55]], ring:1.6, h:4.4},
+    globe:{r:0.8, ring:1.6, h:3.3}, armchair:{r:0.9, ring:1.7, h:2.7}, potions:{r:0.4, ring:1.6, h:3.4},
+    cauldron:{r:1.0, ring:1.9, h:2.9}, barrels:{r:1.1, ring:1.9, h:3.0}, scales:{r:0.7, ring:1.6, h:2.7},
+    cage:{r:0.9, ring:1.8, h:3.3}, trophies:{r:0.6, ring:1.6, h:3.5}, shield:{r:0.3, ring:1.6, h:4.0},
+    spears:{r:0.5, ring:1.6, h:3.7}, chest:{r:0.7, ring:1.6, h:2.0}, cannon:{r:0, cols:[[0,0.4,0.9],[0,-0.7,0.7]], ring:2.0, h:2.5},
+    telescope:{r:0.7, ring:1.6, h:3.3}, starchart:{r:0.9, ring:1.7, h:2.5}, orrery:{r:1.0, ring:2.0, h:3.5},
+    crystal:{r:0.5, ring:1.4, h:2.6}, armillary:{r:0.7, ring:1.6, h:3.3}
+  };
+  const GOLD = 0xc9a23a, IRON = 0x2c2c32, STONE = 0x8a8478, WOOD = 0x6b4426, DARKWOOD = 0x3d2614;
+
+  function painting(w, h, draw){
+    const tex = canvasTex(256, (g,s)=>draw(g,s));
+    tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping; tex.repeat.set(1,1);
+    const pic = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshLambertMaterial({ map: tex }));
+    pic.position.z = 0.06;
+    const frame = box(w+0.3, h+0.3, 0.1, mat(GOLD), 0, 0, 0);
+    return group(frame, pic);
+  }
+  function books(w, h, seed){
+    const r = rand(seed), g = new THREE.Group(), cols = [0x7a2a2a,0x2a4a7a,0x2f6a3a,0x8a6a2a,0x5a2a6a,0x3a3a3a,0x9a4a2a];
+    let x = -w/2 + 0.05;
+    while(x < w/2 - 0.12){
+      const bw = 0.07 + r()*0.08, bh = h*(0.7 + r()*0.28);
+      g.add(box(bw, bh, 0.28, mat(cols[Math.floor(r()*cols.length)]), x+bw/2, bh/2, 0));
+      x += bw + 0.01;
+    }
+    return g;
+  }
+  function shelfUnit(w, h, levels, seed, chained){
+    const g = group(box(w, h, 0.45, mat(DARKWOOD), 0, h/2, -0.05));
+    for(let i=0;i<levels;i++){
+      const y = 0.15 + i*(h-0.3)/levels;
+      g.add(box(w-0.1, 0.05, 0.42, mat(WOOD), 0, y, 0.0));
+      const b = books(w-0.2, (h-0.3)/levels - 0.12, seed+i); b.position.set(0, y+0.03, 0.05); g.add(b);
+    }
+    if(chained){
+      for(let i=0;i<3;i++){
+        const y = 0.6 + i*1.1;
+        for(let k=-4;k<=4;k++){ const l = torus(0.07, 0.018, mat(0x9a9aa2), k*0.13*(w/1.2), y, 0.28); l.rotation.y = (k%2) ? Math.PI/2 : 0; g.add(l); }
+      }
+      g.add(box(0.22, 0.26, 0.1, mat(GOLD), 0, 1.7, 0.32));
+      g.add(torus(0.07, 0.02, mat(GOLD), 0, 1.86, 0.32, Math.PI));
+    }
+    return g;
+  }
+  function hourglass(color){
+    const sand = glowMat(color);
+    return group(
+      box(0.5, 0.06, 0.5, mat(GOLD), 0, 0.03, 0), box(0.5, 0.06, 0.5, mat(GOLD), 0, 1.47, 0),
+      cyl(0.03,0.03,1.44, mat(GOLD), 0.21, 0.75, 0.21, 6), cyl(0.03,0.03,1.44, mat(GOLD), -0.21, 0.75, -0.21, 6),
+      cyl(0.03,0.03,1.44, mat(GOLD), 0.21, 0.75, -0.21, 6), cyl(0.03,0.03,1.44, mat(GOLD), -0.21, 0.75, 0.21, 6),
+      cone(0.18, 0.6, mat(0xccddee, {transparent:true, opacity:0.35}), 0, 1.12, 0), rotX(cone(0.18, 0.6, mat(0xccddee, {transparent:true, opacity:0.35}), 0, 0.38, 0), Math.PI),
+      cone(0.12, 0.25, sand, 0, 1.05, 0), cyl(0.17, 0.17, 0.22, sand, 0, 0.17, 0)
+    );
+  }
+  function skeletonFigure(){
+    const bone = mat(0xe8e2cc);
+    const g = group(sph(0.16, bone, 0, 1.55, 0), cyl(0.04,0.04,0.6, bone, 0, 1.15, 0, 6));
+    for(let i=0;i<4;i++) g.add(rotZ(torus(0.13, 0.02, bone, 0, 1.3 - i*0.11, 0), Math.PI/2));
+    g.add(rotZ(cyl(0.025,0.025,0.55, bone, -0.22, 1.12, 0, 6), 0.3), rotZ(cyl(0.025,0.025,0.55, bone, 0.22, 1.12, 0, 6), -0.3));
+    g.add(cyl(0.03,0.03,0.7, bone, -0.1, 0.5, 0, 6), cyl(0.03,0.03,0.7, bone, 0.1, 0.5, 0, 6), box(0.3, 0.1, 0.1, bone, 0, 0.85, 0));
+    g.add(sph(0.035, glowMat(0x66ff99), -0.06, 1.57, 0.13), sph(0.035, glowMat(0x66ff99), 0.06, 1.57, 0.13));
+    return g;
+  }
+  function spin(o, speed, axis){ animated.push((t,dt)=>{ o.rotation[axis||'y'] += dt*speed; }); return o; }
+  function bob(o, amp, speed){ const y0 = o.position.y, ph = Math.random()*6; animated.push(t=>{ o.position.y = y0 + Math.sin(t*speed+ph)*amp; }); return o; }
+
+  const PROPS = {
+    gate(){
+      const g = group(box(1, 5, 1, mat(STONE), -2.5, 2.5, -0.4), box(1, 5, 1, mat(STONE), 2.5, 2.5, -0.4), box(6, 0.8, 1, mat(STONE), 0, 5.1, -0.4));
+      for(let i=-4;i<=4;i++){ g.add(cyl(0.05,0.05,4.6, mat(IRON), i*0.45, 2.3, -0.4, 6)); g.add(cone(0.09,0.25, mat(IRON), i*0.45, 4.7, -0.4, 6)); }
+      g.add(box(4, 0.12, 0.12, mat(IRON), 0, 1.2, -0.4), box(4, 0.12, 0.12, mat(IRON), 0, 3.4, -0.4));
+      const crest = sph(0.35, mat(GOLD), 0, 5.7, -0.1); g.add(crest);
+      return g;
+    },
+    fountain(){
+      const water = mat(0x3d7fb8, { emissive:0x113355, transparent:true, opacity:0.85 });
+      const g = group(cyl(1.4, 1.5, 0.6, mat(STONE), 0, 0.3, 0, 24), cyl(1.25, 1.25, 0.05, water, 0, 0.55, 0, 24),
+        cyl(0.2, 0.3, 1.6, mat(STONE), 0, 1.2, 0), cyl(0.7, 0.3, 0.3, mat(STONE), 0, 2.05, 0, 20), cyl(0.6, 0.6, 0.04, water, 0, 2.18, 0, 20));
+      const spout = cone(0.12, 0.6, mat(0xa8d4ff, { emissive:0x3366aa, transparent:true, opacity:0.7 }), 0, 2.5, 0, 8);
+      g.add(spout); animated.push(t=>{ spout.scale.y = 1 + Math.sin(t*6)*0.15; });
+      return g;
+    },
+    tree(){
+      const leaf = mat(0x2f5a2c), leaf2 = mat(0x3d6f35);
+      const g = group(cyl(0.32, 0.5, 3.2, mat(0x4a3220), 0, 1.6, 0, 10),
+        rotZ(cyl(0.12, 0.2, 1.6, mat(0x4a3220), 0.6, 2.8, 0, 8), -0.8), rotZ(cyl(0.12, 0.2, 1.6, mat(0x4a3220), -0.6, 3.0, 0.2, 8), 0.9),
+        sph(1.6, leaf, 0, 4.2, 0, 12, 10), sph(1.1, leaf2, 1.2, 3.8, 0.4, 10, 8), sph(1.2, leaf2, -1.1, 4.0, -0.3, 10, 8), sph(1.0, leaf, 0.2, 5.0, 0.6, 10, 8));
+      for(let i=0;i<5;i++) g.add(sph(0.12, mat(0xb03030), Math.cos(i*1.3)*1.4, 3.6+i*0.25, Math.sin(i*1.3)*1.2+0.4, 8, 6));
+      return g;
+    },
+    brooms(){
+      const g = group(box(2.2, 0.12, 0.3, mat(WOOD), 0, 2.1, -0.15), box(0.12, 2.2, 0.3, mat(WOOD), -1.05, 1.1, -0.15), box(0.12, 2.2, 0.3, mat(WOOD), 1.05, 1.1, -0.15));
+      for(let i=0;i<4;i++){
+        const b = group(cyl(0.035, 0.035, 1.9, mat(0x8a5a2a), 0, 1.15, 0, 6), cone(0.16, 0.55, mat(0xc8a050), 0, 0.27, 0, 8));
+        b.position.set(-0.7 + i*0.47, 0, 0.05); b.rotation.z = (i-1.5)*0.06; g.add(b);
+      }
+      return g;
+    },
+    sundial(){
+      const dial = cyl(0.55, 0.55, 0.06, mat(GOLD), 0, 1.13, 0, 24);
+      const g = group(cyl(0.25, 0.35, 1.1, mat(STONE), 0, 0.55, 0, 10), dial);
+      const gn = new THREE.Mesh(new THREE.CylinderGeometry(0.0, 0.3, 0.02, 3), mat(GOLD)); gn.rotation.set(Math.PI/2, 0, 0); gn.position.set(0, 1.3, 0); gn.scale.set(1, 1, 1.6);
+      g.add(rotX(box(0.03, 0.4, 0.45, mat(GOLD), 0, 1.33, 0), -0.4));
+      for(let i=0;i<12;i++) g.add(box(0.03, 0.02, 0.12, mat(0x3a2a10), Math.sin(i/12*Math.PI*2)*0.45, 1.17, Math.cos(i/12*Math.PI*2)*0.45));
+      return g;
+    },
+    hourglasses(){
+      const g = group(box(2.6, 0.9, 0.7, mat(STONE), 0, 0.45, -0.1), box(2.8, 0.1, 0.8, mat(GOLD), 0, 0.92, -0.1));
+      [0xd03a3a, 0x3aa65a, 0x3a6ad0, 0xe0c040].forEach((c,i)=>{ const h = hourglass(c); h.position.set(-0.96 + i*0.64, 0.97, -0.1); g.add(h); });
+      return g;
+    },
+    clock(){
+      const g = group(box(0.9, 2.6, 0.5, mat(DARKWOOD), 0, 1.3, -0.1), box(1.0, 0.25, 0.55, mat(WOOD), 0, 2.72, -0.1),
+        cyl(0.36, 0.36, 0.05, mat(0xf1ead6), 0, 2.15, 0.17, 24), torus(0.36, 0.04, mat(GOLD), 0, 2.15, 0.17));
+      g.children[2].rotation.x = Math.PI/2; g.children[3].rotation.x = 0;
+      const hand1 = box(0.03, 0.28, 0.02, mat(0x111111), 0, 2.15, 0.21); hand1.geometry.translate(0, 0.14, 0); hand1.position.y = 2.15;
+      const hand2 = box(0.04, 0.2, 0.02, mat(0x111111), 0, 2.15, 0.22); hand2.geometry.translate(0, 0.1, 0); hand2.position.y = 2.15;
+      g.add(hand1, hand2); spin(hand1, -0.5, 'z'); spin(hand2, -0.05, 'z');
+      const pend = group(cyl(0.015, 0.015, 0.9, mat(GOLD), 0, -0.45, 0, 6), cyl(0.14, 0.14, 0.04, mat(GOLD), 0, -0.9, 0, 16));
+      pend.children[1].rotation.x = Math.PI/2; pend.position.set(0, 1.7, 0.17); g.add(pend);
+      g.add(box(0.6, 1.2, 0.02, mat(0x1a120a), 0, 1.15, 0.16));
+      animated.push(t=>{ pend.rotation.z = Math.sin(t*2.4)*0.3; });
+      return g;
+    },
+    staircase(){
+      const g = new THREE.Group(), steps = 9;
+      for(let i=0;i<steps;i++){
+        const h = (i+1)*0.38, d = 0.32;
+        g.add(box(5.4, h, d, mat(i%2 ? 0x8b8172 : 0x948a7b), 0, h/2, 1.2 - i*d - d/2));
+      }
+      g.add(box(5.6, 0.12, 2.9, mat(0x6b1d22), 0, 3.48, -0.25)); // red runner on landing
+      for(const sx of [-2.85, 2.85]){
+        g.add(rotX(box(0.12, 0.12, 3.5, mat(DARKWOOD), sx, 2.3, -0.3), -0.85));
+        for(let i=0;i<5;i++) g.add(cyl(0.04, 0.04, 1.0, mat(GOLD), sx, 0.9 + i*0.62, 1.0 - i*0.62, 6));
+        g.add(sph(0.16, mat(GOLD), sx, 1.25, 1.2));
+      }
+      return g;
+    },
+    armour(){
+      const steel = mat(0xb8bcc4), dark = mat(0x5a5e66);
+      const g = group(box(0.6, 0.15, 0.4, mat(STONE), 0, 0.07, 0),
+        cyl(0.09, 0.08, 0.85, steel, -0.13, 0.57, 0, 8), cyl(0.09, 0.08, 0.85, steel, 0.13, 0.57, 0, 8),
+        box(0.5, 0.65, 0.3, steel, 0, 1.3, 0), cyl(0.27, 0.22, 0.25, dark, 0, 0.98, 0, 10),
+        sph(0.16, steel, 0, 1.82, 0), box(0.18, 0.04, 0.05, mat(0x111111), 0, 1.84, 0.14), cone(0.05, 0.3, mat(0xb03030), 0, 2.05, -0.04, 6),
+        sph(0.12, steel, -0.33, 1.55, 0), sph(0.12, steel, 0.33, 1.55, 0),
+        cyl(0.06, 0.06, 0.6, steel, -0.34, 1.2, 0.05, 8), cyl(0.06, 0.06, 0.6, steel, 0.34, 1.2, 0.05, 8),
+        cyl(0.025, 0.025, 2.5, mat(DARKWOOD), 0.42, 1.3, 0.18, 6), rotZ(box(0.4, 0.3, 0.03, steel, 0.42, 2.45, 0.18), 0.0), cone(0.05, 0.3, steel, 0.42, 2.7, 0.18, 6));
+      return g;
+    },
+    knightportrait(){
+      const p = painting(1.7, 2.3, (g,s)=>{
+        g.fillStyle = '#2b3b2a'; g.fillRect(0,0,s,s);
+        g.fillStyle = '#5a3a1a'; g.fillRect(0, s*0.8, s, s*0.2);
+        g.fillStyle = '#9aa0aa'; g.fillRect(s*0.36, s*0.32, s*0.28, s*0.4);
+        g.beginPath(); g.arc(s*0.5, s*0.24, s*0.11, 0, Math.PI*2); g.fill();
+        g.fillStyle = '#111'; g.fillRect(s*0.43, s*0.22, s*0.14, s*0.025);
+        g.fillStyle = '#b02a2a'; g.fillRect(s*0.36, s*0.42, s*0.28, s*0.06);
+        g.fillStyle = '#c9a23a'; g.fillRect(s*0.7, s*0.15, s*0.03, s*0.6); g.fillRect(s*0.64, s*0.3, s*0.15, s*0.03);
+      });
+      p.position.set(0, 3.0, -0.1);
+      return group(p);
+    },
+    hat(){
+      const g = group(cyl(0.38, 0.38, 0.08, mat(WOOD), 0, 0.72, 0, 16));
+      for(let i=0;i<3;i++){ const a = i/3*Math.PI*2; g.add(rotZ(cyl(0.035, 0.035, 0.75, mat(WOOD), Math.cos(a)*0.26, 0.36, Math.sin(a)*0.26, 6), Math.cos(a)*0.12)); }
+      const felt = mat(0x5a4630);
+      g.add(cyl(0.5, 0.5, 0.04, felt, 0, 0.78, 0, 20));
+      const tip = group(cone(0.28, 0.5, felt, 0, 0.25, 0, 12), rotZ(cone(0.17, 0.4, felt, 0.08, 0.6, 0, 10), -0.6));
+      tip.position.y = 0.78; g.add(tip);
+      g.add(box(0.2, 0.03, 0.02, mat(0x1a120a), 0, 1.0, 0.24));
+      animated.push(t=>{ tip.rotation.z = Math.sin(t*1.7)*0.06; });
+      return g;
+    },
+    longtable(){
+      const g = group(box(7, 0.14, 1.6, mat(WOOD), 0, 0.85, 0));
+      for(const lx of [-3.2, 0, 3.2]) for(const lz of [-0.65, 0.65]) g.add(box(0.14, 0.8, 0.14, mat(DARKWOOD), lx, 0.4, lz));
+      for(const bz of [-1.2, 1.2]) g.add(box(6.8, 0.1, 0.4, mat(DARKWOOD), 0, 0.5, bz), box(0.1, 0.45, 0.3, mat(DARKWOOD), -3, 0.22, bz), box(0.1, 0.45, 0.3, mat(DARKWOOD), 3, 0.22, bz));
+      for(let i=0;i<7;i++){
+        const x = -3 + i;
+        for(const z of [-0.45, 0.45]){
+          g.add(cyl(0.18, 0.18, 0.02, mat(0xd6d0c0), x, 0.93, z, 16));
+          g.add(group(cyl(0.06, 0.03, 0.12, mat(GOLD), x+0.25, 1.0, z, 8), cyl(0.015, 0.015, 0.1, mat(GOLD), x+0.25, 0.97, z, 6), cyl(0.07, 0.07, 0.01, mat(GOLD), x+0.25, 0.925, z, 8)));
+        }
+      }
+      g.add(sph(0.3, mat(0xc87a2a), 0, 1.1, 0), sph(0.2, mat(0xb03030), -1.5, 1.05, 0), sph(0.2, mat(0x6aa040), 1.5, 1.05, 0));
+      return g;
+    },
+    fireplace(){
+      const g = group(box(3, 0.4, 0.9, mat(STONE), 0, 0.2, -0.2), box(0.6, 2.6, 0.9, mat(STONE), -1.2, 1.3, -0.2), box(0.6, 2.6, 0.9, mat(STONE), 1.2, 1.3, -0.2),
+        box(3.4, 0.4, 1.1, mat(0x9a9284), 0, 2.75, -0.15), box(1.8, 2.2, 0.1, mat(0x1a1410), 0, 1.4, -0.6), box(2.4, 3.6, 0.6, mat(0x7e786c), 0, 4.75, -0.35));
+      for(let i=0;i<3;i++) g.add(rotZ(cyl(0.1, 0.1, 1.2, mat(0x4a3220), 0, 0.55, -0.25 + i*0.12, 8), Math.PI/2 + (i-1)*0.3));
+      for(let i=0;i<5;i++){ const f = flame(2.2 + (i%2)*0.8); f.position.set(-0.6 + i*0.3, 0.55, -0.2); g.add(f); }
+      const glow = glowSprite('rgba(255,140,40,1)', 3.2); glow.position.set(0, 1.0, 0.1); g.add(glow);
+      for(let i=0;i<3;i++) g.add(cyl(0.12, 0.1, 0.35, mat([0x2a4a8a, 0x8a2a2a, 0x2f6a3a][i]), -0.9 + i*0.9, 3.12, -0.1, 10));
+      return g;
+    },
+    lectern(){
+      const gold = mat(GOLD, { emissive:0x3a2a08 });
+      const g = group(cyl(0.35, 0.45, 0.2, mat(STONE), 0, 0.1, 0, 12), cyl(0.1, 0.14, 1.1, gold, 0, 0.75, 0, 10),
+        sph(0.38, gold, 0, 1.6, 0, 14, 12), sph(0.26, gold, 0, 2.08, 0.04, 14, 12),
+        sph(0.07, glowMat(0xffe070), -0.1, 2.12, 0.26), sph(0.07, glowMat(0xffe070), 0.1, 2.12, 0.26), cone(0.05, 0.12, mat(0x8a5a1a), 0, 2.02, 0.29, 6));
+      g.children[2].scale.set(1, 1.15, 0.85);
+      const wl = sph(0.3, gold, -0.4, 1.75, -0.05), wr = sph(0.3, gold, 0.4, 1.75, -0.05);
+      wl.scale.set(0.35, 0.9, 1); wr.scale.set(0.35, 0.9, 1); wl.rotation.z = 0.5; wr.rotation.z = -0.5;
+      g.add(wl, wr, cone(0.06, 0.16, gold, -0.14, 2.35, 0, 6), cone(0.06, 0.16, gold, 0.14, 2.35, 0, 6));
+      animated.push(t=>{ wl.rotation.z = 0.5 + Math.sin(t*1.3)*0.08; wr.rotation.z = -0.5 - Math.sin(t*1.3)*0.08; });
+      return g;
+    },
+    throne(){
+      const velvet = mat(0x7a1a22), gold = mat(GOLD);
+      return group(box(2.4, 0.3, 2.2, mat(STONE), 0, 0.15, -0.5), box(2.6, 0.06, 2.4, mat(0x6b1d22), 0, 0.31, -0.5),
+        box(1.1, 0.5, 0.9, gold, 0, 0.6, -0.4), box(1.0, 0.15, 0.85, velvet, 0, 0.92, -0.38),
+        box(1.1, 2.6, 0.18, gold, 0, 2.1, -0.9), box(0.85, 2.2, 0.06, velvet, 0, 2.0, -0.8),
+        box(0.14, 0.5, 0.9, gold, -0.55, 1.15, -0.4), box(0.14, 0.5, 0.9, gold, 0.55, 1.15, -0.4),
+        sph(0.12, gold, -0.55, 3.45, -0.9), sph(0.12, gold, 0.55, 3.45, -0.9), cone(0.2, 0.5, gold, 0, 3.6, -0.9, 4), sph(0.1, glowMat(0xff4060), 0, 3.0, -0.78));
+    },
+    mirror(){
+      const glass = mat(0x9fc6e8, { emissive:0x284a6a });
+      const g = group(box(1.3, 2.9, 0.14, mat(GOLD), 0, 1.75, -0.15), box(1.05, 2.6, 0.02, glass, 0, 1.75, -0.07),
+        sph(0.18, mat(GOLD), 0, 3.3, -0.15), box(1.5, 0.14, 0.3, mat(GOLD), 0, 0.3, -0.1));
+      g.children[0].geometry = new THREE.BoxGeometry(1.3, 2.9, 0.14);
+      const shimmer = glowSprite('rgba(170,210,255,1)', 1.2); shimmer.position.set(0, 2.0, 0); g.add(shimmer);
+      animated.push(t=>{ shimmer.material.opacity = 0.35 + Math.sin(t*1.5)*0.25; });
+      return g;
+    },
+    ladyportrait(){
+      const p = painting(1.6, 2.1, (g,s)=>{
+        g.fillStyle = '#3a2a4a'; g.fillRect(0,0,s,s);
+        g.fillStyle = '#6a2a5a'; g.beginPath(); g.moveTo(s*0.25, s); g.lineTo(s*0.5, s*0.42); g.lineTo(s*0.75, s); g.fill();
+        g.fillStyle = '#e8c8a8'; g.beginPath(); g.arc(s*0.5, s*0.33, s*0.1, 0, Math.PI*2); g.fill();
+        g.fillStyle = '#7a4a1a'; g.beginPath(); g.arc(s*0.5, s*0.29, s*0.12, Math.PI, 0); g.fill();
+        g.fillStyle = '#e8d070'; for(let i=0;i<7;i++){ g.beginPath(); g.arc(s*0.4 + i*s*0.033, s*0.46, s*0.012, 0, Math.PI*2); g.fill(); }
+      });
+      p.position.set(0, 2.9, -0.1);
+      return group(p);
+    },
+    tapestry(){
+      const tex = canvasTex(256, (g,s)=>{
+        g.fillStyle = '#20402a'; g.fillRect(0,0,s,s);
+        g.strokeStyle = '#c9a23a'; g.lineWidth = 6; g.strokeRect(8,8,s-16,s-16);
+        g.fillStyle = '#b02a2a';
+        g.beginPath(); g.moveTo(s*0.2, s*0.7); g.quadraticCurveTo(s*0.35, s*0.35, s*0.6, s*0.45); g.quadraticCurveTo(s*0.8, s*0.3, s*0.78, s*0.2);
+        g.lineTo(s*0.85, s*0.28); g.quadraticCurveTo(s*0.75, s*0.55, s*0.55, s*0.6); g.quadraticCurveTo(s*0.4, s*0.75, s*0.2, s*0.7); g.fill();
+        g.beginPath(); g.moveTo(s*0.45, s*0.48); g.lineTo(s*0.3, s*0.22); g.lineTo(s*0.6, s*0.42); g.fill();
+        g.fillStyle = '#f0a030'; g.beginPath(); g.moveTo(s*0.85, s*0.24); g.lineTo(s*0.95, s*0.18); g.lineTo(s*0.92, s*0.3); g.fill();
+      });
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      const cloth = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 3.4, 6, 6), new THREE.MeshLambertMaterial({ map: tex, side: THREE.DoubleSide }));
+      cloth.position.set(0, 3.2, -0.05);
+      const pos = cloth.geometry.attributes.position; const base = pos.array.slice();
+      animated.push(t=>{ for(let i=0;i<pos.count;i++){ const y = base[i*3+1]; pos.array[i*3+2] = base[i*3+2] + Math.sin(t*1.2 + base[i*3]*2)*0.05*(1.7-y)/3.4; } pos.needsUpdate = true; });
+      return group(cloth, cyl(0.05, 0.05, 2.6, mat(GOLD), 0, 4.95, 0, 8));
+    },
+    vase(){
+      const blue = mat(0x2a5aa8), white = mat(0xe8e8f0);
+      const v = new THREE.Mesh(new THREE.LatheGeometry([[0.2,0],[0.42,0.25],[0.5,0.6],[0.38,1.0],[0.18,1.25],[0.22,1.45]].map(p=>new THREE.Vector2(p[0],p[1])), 20), blue);
+      v.position.y = 0.9;
+      return group(box(0.8, 0.9, 0.8, mat(0xd8d2c4), 0, 0.45, 0), v, torus(0.47, 0.03, white, 0, 1.5, 0), torus(0.4, 0.025, white, 0, 1.85, 0));
+    },
+    bust(){
+      const marble = mat(0xece8e0);
+      const g = group(cyl(0.3, 0.35, 1.2, mat(0x9a948a), 0, 0.6, 0, 12), box(0.75, 0.1, 0.75, mat(0x9a948a), 0, 1.25, 0),
+        box(0.6, 0.45, 0.35, marble, 0, 1.52, 0), sph(0.22, marble, 0, 1.98, 0.02), cyl(0.09, 0.1, 0.18, marble, 0, 1.78, 0, 10));
+      g.children[3].scale.set(0.9, 1.15, 1);
+      for(let i=0;i<6;i++) g.add(sph(0.06, marble, Math.cos(i)*0.18, 2.12, Math.sin(i)*0.15 - 0.02));
+      g.add(box(0.25, 0.04, 0.02, mat(GOLD), 0, 1.35, 0.18));
+      return g;
+    },
+    bookshelf(){ return shelfUnit(2.4, 4, 6, 41); },
+    chained(){
+      const s = shelfUnit(2.4, 3.8, 5, 71, true);
+      s.children.forEach(c=>{ if(c.isGroup) c.children.forEach(b=>{ if(b.material && b.material.color) b.material = mat(0x2a1a2a); }); });
+      return s;
+    },
+    desk(){
+      const g = group(box(1.8, 0.1, 0.9, mat(WOOD), 0, 0.85, 0));
+      for(const lx of [-0.8,0.8]) for(const lz of [-0.38,0.38]) g.add(box(0.08, 0.8, 0.08, mat(DARKWOOD), lx, 0.4, lz));
+      const page = mat(0xf2ead6);
+      g.add(rotZ(box(0.4, 0.02, 0.55, page, -0.2, 0.93, 0.05), 0.1), rotZ(box(0.4, 0.02, 0.55, page, 0.2, 0.93, 0.05), -0.1), box(0.06, 0.04, 0.56, mat(0x5a2a1a), 0, 0.91, 0.05));
+      g.add(cyl(0.05, 0.06, 0.25, mat(0xf0e8d0), 0.65, 1.02, -0.2, 8));
+      const f = flame(0.8); f.position.set(0.65, 1.15, -0.2); g.add(f);
+      g.add(cyl(0.02, 0.0, 0.35, mat(0xeeeeee), -0.6, 1.05, -0.25, 6), cyl(0.07, 0.07, 0.1, mat(0x1a1a2a), -0.6, 0.95, -0.25, 8));
+      g.add(box(0.6, 0.08, 0.6, mat(DARKWOOD), 0, 0.5, -0.9), box(0.6, 0.9, 0.08, mat(DARKWOOD), 0, 0.95, -1.18));
+      return g;
+    },
+    globe(){
+      const tex = canvasTex(256, (g,s)=>{
+        g.fillStyle = '#2a5a8a'; g.fillRect(0,0,s,s);
+        g.fillStyle = '#c8b070'; const r = rand(31);
+        for(let i=0;i<9;i++){ g.beginPath(); const cx = r()*s, cy = s*0.2 + r()*s*0.6; g.ellipse(cx, cy, 15+r()*30, 10+r()*25, r()*3, 0, Math.PI*2); g.fill(); }
+        g.strokeStyle = 'rgba(255,255,255,.25)'; for(let i=1;i<6;i++){ g.beginPath(); g.moveTo(0, i*s/6); g.lineTo(s, i*s/6); g.stroke(); }
+      });
+      tex.repeat.set(1,1);
+      const ball = new THREE.Mesh(new THREE.SphereGeometry(0.75, 24, 16), new THREE.MeshLambertMaterial({ map: tex }));
+      ball.position.y = 2.0; ball.rotation.z = 0.4; spin(ball, 0.25);
+      return group(cyl(0.45, 0.6, 0.15, mat(DARKWOOD), 0, 0.08, 0, 12), cyl(0.08, 0.12, 1.1, mat(WOOD), 0, 0.7, 0, 10), torus(0.85, 0.04, mat(GOLD), 0, 2.0, 0), ball);
+    },
+    armchair(){
+      const red = mat(0x8a2a2a);
+      const g = group(box(1.2, 0.5, 1.0, red, 0, 0.45, 0), box(1.2, 1.1, 0.25, red, 0, 1.1, -0.42), box(0.22, 0.75, 1.0, red, -0.6, 0.65, 0), box(0.22, 0.75, 1.0, red, 0.6, 0.65, 0),
+        box(1.0, 0.12, 0.8, mat(0xa83a3a), 0, 0.75, 0.05));
+      for(const lx of [-0.5,0.5]) for(const lz of [-0.4,0.4]) g.add(cyl(0.05, 0.04, 0.2, mat(DARKWOOD), lx, 0.1, lz, 6));
+      g.add(cyl(0.03, 0.03, 1.9, mat(GOLD), 1.1, 0.95, -0.3, 6), cyl(0.2, 0.25, 0.05, mat(GOLD), 1.1, 0.03, -0.3, 10), cone(0.32, 0.4, mat(0xe8d6a0, { emissive:0x6a5020 }), 1.1, 1.95, -0.3, 12));
+      const glow = glowSprite('rgba(255,220,150,1)', 1.6); glow.position.set(1.1, 1.85, -0.3); g.add(glow);
+      return g;
+    },
+    potions(){
+      const g = group(box(2.6, 2.6, 0.45, mat(DARKWOOD), 0, 1.3, -0.1)), r = rand(51);
+      const cols = [0x40ff80, 0xff4080, 0x40a0ff, 0xffd040, 0xb060ff, 0xff8040];
+      for(let lvl=0; lvl<3; lvl++){
+        const y = 0.35 + lvl*0.8;
+        g.add(box(2.5, 0.05, 0.45, mat(WOOD), 0, y, 0.0));
+        for(let i=0;i<7;i++){
+          const c = cols[Math.floor(r()*cols.length)], h = 0.2 + r()*0.25;
+          const bottle = group(cyl(0.08, 0.1, h, mat(c, { emissive:c, emissiveIntensity:0.6, transparent:true, opacity:0.85 }), 0, h/2, 0, 8), cyl(0.03, 0.03, 0.1, mat(0xddddcc), 0, h+0.05, 0, 6));
+          bottle.position.set(-1.05 + i*0.35, y+0.03, 0.05); g.add(bottle);
+        }
+      }
+      return g;
+    },
+    cauldron(){
+      const brew = glowMat(0x3aff6a);
+      const pot = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14, 0, Math.PI*2, Math.PI*0.25, Math.PI*0.75), mat(0x1c1c20, { side: THREE.DoubleSide }));
+      pot.position.y = 0.95;
+      const g = group(pot, torus(0.62, 0.07, mat(0x2a2a30), 0, 1.55, 0), cyl(0.6, 0.6, 0.05, brew, 0, 1.45, 0, 20));
+      g.children[1].rotation.x = Math.PI/2;
+      for(let i=0;i<3;i++){ const a = i/3*Math.PI*2; g.add(rotZ(cyl(0.06, 0.04, 0.5, mat(0x1c1c20), Math.cos(a)*0.55, 0.2, Math.sin(a)*0.55, 6), 0.2)); }
+      for(let i=0;i<6;i++){
+        const b = sph(0.06 + Math.random()*0.05, brew, (Math.random()-0.5)*0.8, 1.5, (Math.random()-0.5)*0.8, 8, 6);
+        const ph = Math.random()*3; g.add(b);
+        animated.push(t=>{ const k = ((t*0.8+ph)%1.6)/1.6; b.position.y = 1.47 + k*0.9; b.scale.setScalar(1-k); });
+      }
+      const glow = glowSprite('rgba(80,255,130,1)', 3); glow.position.y = 1.8; g.add(glow);
+      const fire = flame(2.2); fire.position.y = 0.0; g.add(fire);
+      return g;
+    },
+    barrels(){
+      const g = new THREE.Group();
+      [[-0.55,0,0],[0.55,0,0],[0,0.95,0]].forEach(([x,y,z])=>{
+        const b = group(cyl(0.48, 0.48, 0.95, mat(0x7a4a26), 0, 0.47, 0, 14), torus(0.49, 0.03, mat(IRON), 0, 0.2, 0), torus(0.49, 0.03, mat(IRON), 0, 0.75, 0));
+        b.children[1].rotation.x = b.children[2].rotation.x = Math.PI/2;
+        b.position.set(x, y, z); g.add(b);
+      });
+      g.add(box(0.2, 0.25, 0.02, mat(0xe8dcb8), 0.55, 0.55, 0.49));
+      return g;
+    },
+    scales(){
+      const brass = mat(0xc89a3a);
+      const g = group(box(2.0, 0.12, 0.9, mat(WOOD), 0, 0.9, -0.05));
+      for(const lx of [-0.9,0.9]) for(const lz of [-0.4,0.3]) g.add(box(0.1, 0.85, 0.1, mat(DARKWOOD), lx, 0.43, lz));
+      g.add(cyl(0.15, 0.2, 0.06, brass, 0, 0.99, 0, 12), cyl(0.03, 0.03, 0.9, brass, 0, 1.45, 0, 8));
+      const beam = group(box(1.0, 0.04, 0.04, brass, 0, 0, 0));
+      for(const sx of [-0.48, 0.48]){ beam.add(cyl(0.005, 0.005, 0.45, brass, sx, -0.22, 0, 4), cyl(0.18, 0.12, 0.05, brass, sx, -0.45, 0, 12)); }
+      beam.position.y = 1.9; g.add(beam);
+      animated.push(t=>{ beam.rotation.z = Math.sin(t*0.9)*0.12; });
+      g.add(cyl(0.1, 0.1, 0.25, mat(0x6a9a6a, { transparent:true, opacity:0.7 }), -0.75, 1.08, 0.15, 8), cyl(0.08, 0.08, 0.2, mat(0x9a6a9a, { transparent:true, opacity:0.7 }), 0.75, 1.06, 0.15, 8));
+      return g;
+    },
+    cage(){
+      const g = group(cyl(0.9, 0.9, 0.1, mat(IRON), 0, 0.05, 0, 16), cyl(0.9, 0.9, 0.1, mat(IRON), 0, 2.5, 0, 16), cone(0.9, 0.6, mat(IRON), 0, 2.85, 0, 16));
+      for(let i=0;i<14;i++){ const a = i/14*Math.PI*2; g.add(cyl(0.03, 0.03, 2.4, mat(IRON), Math.cos(a)*0.88, 1.25, Math.sin(a)*0.88, 5)); }
+      const sk = skeletonFigure(); sk.position.y = 0.1; g.add(sk);
+      g.add(cyl(0.03, 0.03, 4.0, mat(IRON), 0, 5.1, 0, 5));
+      return g;
+    },
+    trophies(){
+      const glass = mat(0xbfdcef, { transparent:true, opacity:0.18 });
+      const g = group(box(1.8, 0.3, 0.6, mat(DARKWOOD), 0, 0.15, -0.05), box(1.8, 0.1, 0.6, mat(DARKWOOD), 0, 2.55, -0.05), box(1.8, 2.2, 0.04, mat(0x2a1a10), 0, 1.4, -0.33), box(1.78, 2.2, 0.56, glass, 0, 1.4, -0.05));
+      for(let lvl=0; lvl<2; lvl++){
+        g.add(box(1.7, 0.04, 0.5, mat(WOOD), 0, 0.35 + lvl*1.05, -0.05));
+        for(let i=0;i<3;i++){
+          const cup = group(cyl(0.16, 0.06, 0.3, mat(GOLD, { emissive:0x4a3008 }), 0, 0.35, 0, 12), cyl(0.03, 0.03, 0.15, mat(GOLD), 0, 0.12, 0, 6), cyl(0.1, 0.1, 0.04, mat(GOLD), 0, 0.02, 0, 10),
+            torus(0.08, 0.015, mat(GOLD), -0.17, 0.38, 0), torus(0.08, 0.015, mat(GOLD), 0.17, 0.38, 0));
+          cup.position.set(-0.55 + i*0.55, 0.37 + lvl*1.05, -0.05); g.add(cup);
+        }
+      }
+      return g;
+    },
+    shield(){
+      const g = new THREE.Group();
+      const sh = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 0.1, 3), mat(0x8a2a2a));
+      sh.rotation.set(Math.PI/2, 0, Math.PI); sh.scale.set(1, 1, 1.25); sh.position.set(0, 3.0, -0.2);
+      const boss = sph(0.18, mat(GOLD), 0, 3.15, -0.12);
+      const band = box(0.14, 1.3, 0.04, mat(GOLD), 0, 3.0, -0.13);
+      g.add(sh, boss, band);
+      for(const s of [-1,1]){
+        const sword = group(box(0.07, 2.0, 0.02, mat(0xd0d4dc), 0, 0, 0), box(0.4, 0.06, 0.05, mat(GOLD), 0, -0.95, 0), cyl(0.03, 0.03, 0.35, mat(0x4a2a1a), 0, -1.15, 0, 6), sph(0.05, mat(GOLD), 0, -1.35, 0));
+        sword.position.set(0, 3.0, -0.25); sword.rotation.z = s*0.7 + Math.PI; g.add(sword);
+      }
+      return g;
+    },
+    spears(){
+      const g = group(box(2.0, 0.12, 0.35, mat(WOOD), 0, 0.3, -0.1), box(2.0, 0.12, 0.25, mat(WOOD), 0, 2.2, -0.2), box(0.12, 2.3, 0.15, mat(DARKWOOD), -0.95, 1.15, -0.25), box(0.12, 2.3, 0.15, mat(DARKWOOD), 0.95, 1.15, -0.25));
+      for(let i=0;i<5;i++){
+        const sp = group(cyl(0.03, 0.03, 3.0, mat(WOOD), 0, 1.5, 0, 6), cone(0.07, 0.4, mat(0xd0d4dc), 0, 3.2, 0, 6), box(0.12, 0.25, 0.01, mat(0x2a4a8a), 0.08, 2.8, 0));
+        sp.position.set(-0.7 + i*0.35, 0.2, -0.1); sp.rotation.z = (i-2)*0.03; g.add(sp);
+      }
+      return g;
+    },
+    chest(){
+      const g = group(box(1.2, 0.6, 0.75, mat(0x6b3a1a), 0, 0.3, 0), box(1.24, 0.06, 0.08, mat(GOLD), 0, 0.15, 0.35), box(1.24, 0.06, 0.08, mat(GOLD), 0, 0.5, 0.35), box(0.15, 0.2, 0.05, mat(GOLD), 0, 0.48, 0.39));
+      const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.375, 0.375, 1.2, 14, 1, false, 0, Math.PI), mat(0x6b3a1a));
+      lid.rotation.z = Math.PI/2; lid.position.set(0, 0.6, -0.1); lid.rotation.x = -0.9; g.add(lid);
+      for(let i=0;i<14;i++) g.add(cyl(0.06, 0.06, 0.02, mat(GOLD, { emissive:0x6a4a10 }), (Math.random()-0.5)*1.0, 0.62 + Math.random()*0.05, (Math.random()-0.5)*0.55, 10));
+      g.add(sph(0.08, glowMat(0x40e0ff), 0.25, 0.7, 0.05), sph(0.07, glowMat(0xff3060), -0.3, 0.7, -0.1));
+      const glow = glowSprite('rgba(255,210,90,1)', 1.8); glow.position.y = 0.9; g.add(glow);
+      return g;
+    },
+    cannon(){
+      const bronze = mat(0xa8763a);
+      const barrel = group(cyl(0.22, 0.3, 2.2, bronze, 0, 0, 0, 14), torus(0.24, 0.05, bronze, 0, 1.0, 0), torus(0.31, 0.05, bronze, 0, -0.9, 0), sph(0.25, bronze, 0, -1.15, 0));
+      barrel.rotation.x = Math.PI/2 - 0.2; barrel.position.set(0, 0.85, 0.1);
+      const g = group(box(0.8, 0.35, 1.6, mat(DARKWOOD), 0, 0.45, -0.3), barrel);
+      for(const sx of [-0.5, 0.5]) for(const sz of [0.2, -0.9]){ const w = cyl(0.32, 0.32, 0.12, mat(WOOD), sx, 0.32, sz, 12); w.rotation.z = Math.PI/2; g.add(w); }
+      for(let i=0;i<3;i++) g.add(sph(0.14, mat(IRON), -0.25 + i*0.25, 0.14, 1.0));
+      return g;
+    },
+    telescope(){
+      const brass = mat(0xc89a3a);
+      const g = new THREE.Group();
+      for(let i=0;i<3;i++){ const a = i/3*Math.PI*2; g.add(rotZ(cyl(0.04, 0.04, 1.6, mat(DARKWOOD), Math.cos(a)*0.3, 0.75, Math.sin(a)*0.3, 6), Math.cos(a)*-0.2)); }
+      const tube = group(cyl(0.12, 0.18, 2.2, brass, 0, 0, 0, 14), torus(0.19, 0.03, mat(GOLD), 0, -1.0, 0), torus(0.14, 0.02, mat(GOLD), 0, 0.6, 0));
+      tube.position.set(0, 1.7, 0); tube.rotation.x = -0.9; g.add(tube);
+      animated.push(t=>{ tube.rotation.y = Math.sin(t*0.2)*0.4; });
+      return g;
+    },
+    starchart(){
+      const tex = canvasTex(256, (g,s)=>{
+        g.fillStyle = '#121a3a'; g.fillRect(0,0,s,s);
+        const r = rand(61); g.fillStyle = '#fff6d0';
+        const pts = []; for(let i=0;i<40;i++){ const p = [r()*s, r()*s]; pts.push(p); g.beginPath(); g.arc(p[0], p[1], 1+r()*2.5, 0, Math.PI*2); g.fill(); }
+        g.strokeStyle = 'rgba(201,162,58,.7)'; g.lineWidth = 1.5;
+        for(let i=0;i<10;i++){ g.beginPath(); g.moveTo(...pts[i]); g.lineTo(...pts[i+1]); g.stroke(); }
+        g.strokeStyle = 'rgba(201,162,58,.5)'; g.beginPath(); g.arc(s/2, s/2, s*0.42, 0, Math.PI*2); g.stroke();
+      });
+      tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+      const chart = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1.0), new THREE.MeshLambertMaterial({ map: tex, emissive: 0x111a33 }));
+      chart.rotation.x = -Math.PI/2 + 0.25; chart.position.set(0, 1.0, 0);
+      const g = group(box(1.9, 0.08, 1.2, mat(WOOD), 0, 0.85, 0), chart);
+      for(const lx of [-0.85,0.85]) for(const lz of [-0.5,0.5]) g.add(box(0.08, 0.85, 0.08, mat(DARKWOOD), lx, 0.42, lz));
+      g.add(cyl(0.02, 0.02, 0.3, mat(GOLD), 0.6, 1.05, 0.3, 6), cyl(0.05, 0.05, 0.6, mat(0xe8dcb8), -0.6, 0.95, -0.4, 10));
+      return g;
+    },
+    orrery(){
+      const g = group(cyl(0.5, 0.7, 0.2, mat(DARKWOOD), 0, 0.1, 0, 14), cyl(0.06, 0.08, 1.6, mat(GOLD), 0, 0.9, 0, 8));
+      const sun = sph(0.35, glowMat(0xffc040), 0, 1.9, 0); g.add(sun);
+      const sunGlow = glowSprite('rgba(255,200,80,1)', 2.2); sunGlow.position.y = 1.9; g.add(sunGlow);
+      [[0.8, 0.09, 0x9a9aa0, 1.4],[1.2, 0.13, 0xd0a060, 0.9],[1.6, 0.14, 0x3a7ad0, 0.6],[2.0, 0.11, 0xc0503a, 0.4]].forEach(([rad, size, col, speed])=>{
+        const arm = group(box(rad, 0.02, 0.02, mat(GOLD), rad/2, 0, 0), sph(size, mat(col, { emissive: col, emissiveIntensity:0.25 }), rad, 0, 0));
+        arm.position.y = 1.9; arm.rotation.y = Math.random()*6; g.add(arm); spin(arm, speed);
+      });
+      return g;
+    },
+    crystal(){
+      const ball = sph(0.32, mat(0xb8a0ff, { emissive:0x5a3aa8, transparent:true, opacity:0.75 }), 0, 1.45, 0, 20, 16);
+      const g = group(cyl(0.3, 0.45, 0.25, mat(DARKWOOD), 0, 0.12, 0, 10), cyl(0.08, 0.12, 0.85, mat(0x3a2a4a), 0, 0.65, 0, 8),
+        cyl(0.25, 0.15, 0.12, mat(GOLD), 0, 1.12, 0, 10), ball);
+      const swirl = sph(0.18, glowMat(0xffffff), 0, 1.45, 0, 8, 6); swirl.material = new THREE.MeshBasicMaterial({ color:0xe8deff, transparent:true, opacity:0.5 });
+      g.add(swirl); spin(swirl, 1.5);
+      const glow = glowSprite('rgba(180,140,255,1)', 1.6); glow.position.y = 1.45; g.add(glow);
+      animated.push(t=>{ swirl.scale.setScalar(0.7 + Math.sin(t*2)*0.25); });
+      return g;
+    },
+    armillary(){
+      const g = group(cyl(0.35, 0.5, 0.15, mat(DARKWOOD), 0, 0.08, 0, 12), cyl(0.06, 0.1, 1.3, mat(GOLD), 0, 0.75, 0, 8), sph(0.12, glowMat(0x88aaff), 0, 2.15, 0));
+      const rings = new THREE.Group(); rings.position.y = 2.15;
+      [[0.75,0,0],[0.68,Math.PI/2,0],[0.6,Math.PI/2,Math.PI/2],[0.52,0.4,0.9]].forEach(([r,a,b])=>{ const tr = torus(r, 0.025, mat(GOLD)); tr.rotation.set(a, b, 0); rings.add(tr); });
+      g.add(rings); spin(rings, 0.35); spin(rings.children[3], 0.9, 'x');
+      return g;
+    }
+  };
+
+  function placeProp(s){
+    const g = PROPS[s.prop]();
+    g.position.set(s.x, 0, s.z);
+    g.rotation.y = FACE_YAW[s.face];
+    scene.add(g);
+    const meta = PROP_META[s.prop] || {};
+    if(meta.r) colliders.push({ x:s.x, z:s.z, r:meta.r });
+    (meta.cols||[]).forEach(([lx,lz,r])=>{
+      const a = FACE_YAW[s.face], c = Math.cos(a), sn = Math.sin(a);
+      colliders.push({ x: s.x + lx*c + lz*sn, z: s.z - lx*sn + lz*c, r });
+    });
+    return g;
+  }
+
+  /* ---------- non-station decoration ---------- */
+  function buildDecor(){
+    // Great Hall: two more long tables, floating candles, banners
+    [[7, 30], [18, 28.5]].forEach(([x,z])=>{ const t = PROPS.longtable(); t.position.set(x, 0, z); t.rotation.y = Math.PI/2; scene.add(t); for(const dz of [-2.6,0,2.6]) colliders.push({ x, z:z+dz, r:1.3 }); });
+    const candleCount = 70, candles = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.05, 0.35, 6), mat(0xf4ecd8), candleCount);
+    const flames = new THREE.InstancedMesh(new THREE.SphereGeometry(0.06, 6, 4), glowMat(0xffb040), candleCount);
+    const cr = rand(77), cdata = [];
+    for(let i=0;i<candleCount;i++) cdata.push({ x: 3 + cr()*18, z: 17 + cr()*24, y: 4.4 + cr()*1.6, ph: cr()*6 });
+    scene.add(candles, flames);
+    const m4 = new THREE.Matrix4();
+    animated.push(t=>{
+      cdata.forEach((c,i)=>{ const y = c.y + Math.sin(t*0.8 + c.ph)*0.12; m4.makeTranslation(c.x, y, c.z); candles.setMatrixAt(i, m4); m4.makeTranslation(c.x, y+0.22, c.z); flames.setMatrixAt(i, m4); });
+      candles.instanceMatrix.needsUpdate = true; flames.instanceMatrix.needsUpdate = true;
+    });
+    [[0xb02a2a, 2.15, 21, Math.PI/2], [0x2a7a3a, 2.15, 35, Math.PI/2], [0x2a4aa8, 21.85, 21, -Math.PI/2], [0xd0a830, 21.85, 31, -Math.PI/2]].forEach(([c,x,z,ry])=>{
+      const banner = group(box(1.4, 3.2, 0.04, mat(c), 0, 0, 0), cone(0.7, 0.6, mat(c), 0, -1.9, 0, 3), sph(0.3, mat(GOLD), 0, 0.4, 0.05), cyl(0.04, 0.04, 1.7, mat(GOLD), 0, 1.65, 0, 6));
+      banner.children[1].rotation.z = Math.PI; banner.children[1].scale.z = 0.05;
+      banner.children[3].rotation.z = Math.PI/2;
+      banner.position.set(x, 4.4, z); banner.rotation.y = ry; scene.add(banner);
+    });
+    // Library: extra shelves along the north wall
+    [28, 31.2, 34.4].forEach((x,i)=>{ const s = shelfUnit(2.4, 4, 6, 90+i); s.position.set(x, 0, 2.35); scene.add(s); colliders.push({ x:x-0.8, z:2.6, r:0.55 }, { x:x+0.8, z:2.6, r:0.55 }); });
+    // Courtyard: hedges along the side walls, grass patches
+    const grassMat = new THREE.MeshLambertMaterial({ map: TEX.grass });
+    [[30, 51, 4, 3], [39, 52.5, 3, 4]].forEach(([x,z,w,d])=>{ const p = new THREE.Mesh(new THREE.PlaneGeometry(w, d), grassMat); p.rotation.x = -Math.PI/2; p.position.set(x, 0.02, z); scene.add(p); });
+    for(let z=46; z<=58; z+=3){ scene.add(box(0.7, 1.0, 2.4, mat(0x2d4a26), 24.5, 0.5, z)); }
+    for(let i=0; i<46; i++) colliders.push({ x:24.5, z:46+i*0.3, r:0.35 });
+    // Dungeon: hanging chains and a green haze
+    [[52, 12], [60, 6], [58, 15]].forEach(([x,z])=>{ for(let i=0;i<10;i++){ const l = torus(0.08, 0.02, mat(0x5a5a62), x, 6.6 - i*0.17, z); l.rotation.y = (i%2) ? Math.PI/2 : 0; scene.add(l); } });
+    const haze = glowSprite('rgba(70,255,120,.6)', 10); haze.position.set(56, 1.2, 10); scene.add(haze);
+    // Tower: a ring of pillars
+    [[48.5, 40.5], [63.5, 40.5], [48.5, 54.5], [63.5, 54.5]].forEach(([x,z])=>{ scene.add(cyl(0.45, 0.55, WALL_H, mat(0x9a948a), x, WALL_H/2, z, 12)); colliders.push({ x, z, r:0.55 }); });
+  }
+
+  /* ---------- the explorer ---------- */
+  let hero = null;
+  function buildHero(){
+    const robe = mat(0x1d1a24), trim = mat(0x8a1f24), skin = mat(0xe2b892), hair = mat(0x2a1a10);
+    const legL = group(cyl(0.08, 0.07, 0.5, mat(0x22222a), 0, -0.25, 0, 8), box(0.14, 0.08, 0.24, mat(0x1a120a), 0, -0.5, 0.05));
+    const legR = legL.clone();
+    legL.position.set(-0.12, 0.55, 0); legR.position.set(0.12, 0.55, 0);
+    const body = group(
+      cyl(0.24, 0.46, 1.05, robe, 0, 0.95, 0, 16),
+      torus(0.44, 0.03, trim, 0, 0.45, 0),
+      cyl(0.2, 0.24, 0.3, robe, 0, 1.55, 0, 14),
+      torus(0.17, 0.07, trim, 0, 1.68, 0),
+      box(0.12, 0.35, 0.05, trim, 0.1, 1.5, 0.2),
+      sph(0.19, skin, 0, 1.92, 0, 16, 12),
+      sph(0.2, hair, 0, 1.98, -0.03, 16, 10),
+      sph(0.025, mat(0x111111), -0.07, 1.94, 0.17, 6, 4), sph(0.025, mat(0x111111), 0.07, 1.94, 0.17, 6, 4),
+      torus(0.06, 0.012, mat(0x222222), -0.07, 1.94, 0.18), torus(0.06, 0.012, mat(0x222222), 0.07, 1.94, 0.18)
+    );
+    body.children[1].rotation.x = Math.PI/2; body.children[3].rotation.x = Math.PI/2;
+    body.children[6].scale.set(1, 0.75, 1);
+    const hat = group(cyl(0.34, 0.34, 0.03, robe, 0, 0, 0, 18), rotZ(cone(0.19, 0.55, robe, 0.02, 0.27, 0, 14), -0.12));
+    hat.position.y = 2.1; body.add(hat);
+    const arm = ()=>group(cyl(0.07, 0.09, 0.6, robe, 0, -0.3, 0, 8), sph(0.06, skin, 0, -0.62, 0, 8, 6));
+    const armL = arm(), armR = arm();
+    armL.position.set(-0.27, 1.62, 0); armR.position.set(0.27, 1.62, 0);
+    const wand = group(cyl(0.012, 0.018, 0.4, mat(0x4a2a12), 0, -0.2, 0.12, 6));
+    wand.children[0].rotation.x = 1.2;
+    const tip = sph(0.03, glowMat(0xffe9a8), 0, -0.13, 0.31, 6, 4); wand.add(tip);
+    const tipGlow = glowSprite('rgba(255,230,150,1)', 0.5); tipGlow.position.copy(tip.position); wand.add(tipGlow);
+    wand.position.y = -0.62; armR.add(wand);
+    const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 20), new THREE.MeshBasicMaterial({ color:0x000000, transparent:true, opacity:0.35, depthWrite:false }));
+    shadow.rotation.x = -Math.PI/2; shadow.position.y = 0.02;
+    const root = group(shadow, legL, legR, body, armL, armR);
+    scene.add(root);
+    hero = { root, body, legL, legR, armL, armR, tipGlow };
+  }
+  function animateHero(dt){
+    const moving = P.speed > 0.2;
+    P.walkPhase += dt * (moving ? P.speed*2.6 : 0);
+    const swing = moving ? Math.sin(P.walkPhase) * Math.min(1, P.speed/3) : 0;
+    hero.legL.rotation.x = swing*0.7; hero.legR.rotation.x = -swing*0.7;
+    hero.armL.rotation.x = -swing*0.55; hero.armR.rotation.x = swing*0.45 - (nearbyStation>=0 ? 0.9 : 0);
+    hero.body.position.y = moving ? Math.abs(Math.sin(P.walkPhase))*0.05 : Math.sin(performance.now()/700)*0.012;
+    hero.tipGlow.material.opacity = nearbyStation>=0 ? 1 : 0.35;
+    hero.root.position.set(P.x, 0, P.z);
+    hero.root.rotation.y = P.yaw;
+  }
+
+  /* ---------- movement & collision ---------- */
+  function blocked(x, z){
+    const r = PLAYER_R;
+    if(!walkable(x-r, z-r) || !walkable(x+r, z-r) || !walkable(x-r, z+r) || !walkable(x+r, z+r)) return true;
+    for(const c of colliders){ const dx = x-c.x, dz = z-c.z, rr = c.r + r; if(dx*dx + dz*dz < rr*rr) return true; }
+    return false;
+  }
+  function angleLerp(a, b, k){ let d = b - a; while(d > Math.PI) d -= Math.PI*2; while(d < -Math.PI) d += Math.PI*2; return a + d*k; }
+  function movePlayer(dt){
+    let fwd = 0, side = 0;
+    if(keys.KeyW || keys.ArrowUp) fwd += 1;
+    if(keys.KeyS || keys.ArrowDown) fwd -= 1;
+    if(keys.KeyD) side += 1;
+    if(keys.KeyA) side -= 1;
+    if(keys.ArrowLeft) cam.yaw += dt*2.0;
+    if(keys.ArrowRight) cam.yaw -= dt*2.0;
+    fwd += -input.joyZ; side += input.joyX;
+    const len = Math.hypot(fwd, side);
+    const panelOpen = panelStation !== -1;
+    if(len < 0.05 || panelOpen){ P.speed = Math.max(0, P.speed - dt*12); return; }
+    fwd /= Math.max(1, len); side /= Math.max(1, len);
+    const run = keys.ShiftLeft || keys.ShiftRight || Math.min(1, len) > 0.92 && (input.joyX || input.joyZ);
+    const target = (run ? 6.2 : 3.3) * Math.min(1, len);
+    P.speed += (target - P.speed) * Math.min(1, dt*10);
+    // camera looks along -(sin yaw, cos yaw); forward is away from the camera
+    const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw);
+    const rx = -fz, rz = fx;
+    let mx = fx*fwd + rx*side, mz = fz*fwd + rz*side;
+    const ml = Math.hypot(mx, mz); mx /= ml; mz /= ml;
+    const step = P.speed * dt;
+    const nx = P.x + mx*step, nz = P.z + mz*step;
+    if(!blocked(nx, P.z)) P.x = nx;
+    if(!blocked(P.x, nz)) P.z = nz;
+    P.yaw = angleLerp(P.yaw, Math.atan2(mx, mz), Math.min(1, dt*12));
+  }
+
+  /* ---------- third-person camera that never clips through walls ---------- */
+  function cameraClear(x, y, z){
+    if(!walkable(x, z)) return false;
+    const room = roomAtWorld(x, z);
+    return y < WALL_H - 0.35 || (room && room.sky);
+  }
+  function updateCamera(dt){
+    cam.pitch = Math.max(0.05, Math.min(1.15, cam.pitch));
+    cam.dist = Math.max(2.2, Math.min(10, cam.dist));
+    const tx = P.x, ty = 1.7, tz = P.z;
+    const dx = Math.sin(cam.yaw)*Math.cos(cam.pitch), dy = Math.sin(cam.pitch), dz = Math.cos(cam.yaw)*Math.cos(cam.pitch);
+    let allowed = cam.dist;
+    for(let d = 0.3; d <= cam.dist; d += 0.15){
+      if(!cameraClear(tx + dx*d, ty + dy*d, tz + dz*d)){ allowed = Math.max(0.6, d - 0.35); break; }
+    }
+    cam.curDist = allowed < cam.curDist ? allowed : cam.curDist + (allowed - cam.curDist)*Math.min(1, dt*4);
+    camera.position.set(tx + dx*cam.curDist, ty + dy*cam.curDist, tz + dz*cam.curDist);
+    camera.lookAt(tx, ty, tz);
+    hero.root.visible = cam.curDist > 0.9;
+  }
+
+  /* ---------- input ---------- */
+  let drag = null;
+  function inTextField(e){ return e.target && e.target.closest && e.target.closest('input, textarea, select'); }
+  function onKeyDown(e){
+    if(!running) return;
+    if(inTextField(e)){ if(e.code==='Escape') closePanel(); return; }
+    if(e.code==='Escape'){ if(panelStation !== -1) closePanel(); else if(mapBig) toggleMap(); return; }
+    if(e.code==='KeyE' || e.code==='Enter' || e.code==='Space'){ e.preventDefault(); if(panelStation === -1) interact(); return; }
+    if(e.code==='KeyM'){ toggleMap(); return; }
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+    keys[e.code] = true;
+  }
+  function onKeyUp(e){ keys[e.code] = false; }
+  function wireInput(canvas){
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', ()=>{ for(const k in keys) keys[k] = false; });
+    canvas.addEventListener('pointerdown', e=>{ drag = { id:e.pointerId, x:e.clientX, y:e.clientY }; canvas.setPointerCapture(e.pointerId); });
+    canvas.addEventListener('pointermove', e=>{
+      if(!drag || drag.id!==e.pointerId) return;
+      cam.yaw -= (e.clientX - drag.x)*0.006; cam.pitch += (e.clientY - drag.y)*0.004;
+      drag.x = e.clientX; drag.y = e.clientY;
+    });
+    const end = e=>{ if(drag && drag.id===e.pointerId) drag = null; };
+    canvas.addEventListener('pointerup', end); canvas.addEventListener('pointercancel', end);
+    canvas.addEventListener('wheel', e=>{ e.preventDefault(); cam.dist += e.deltaY*0.005; }, { passive:false });
+    // touch joystick
+    const joy = document.getElementById('castle-joy'), knob = document.getElementById('castle-joy-knob');
+    let joyId = null;
+    const joyMove = e=>{
+      const r = joy.getBoundingClientRect(), cx = r.left + r.width/2, cy = r.top + r.height/2;
+      let dx = e.clientX - cx, dy = e.clientY - cy; const max = r.width/2 - 10, l = Math.hypot(dx, dy);
+      if(l > max){ dx *= max/l; dy *= max/l; }
+      knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      input.joyX = dx/max; input.joyZ = dy/max;
+    };
+    joy.addEventListener('pointerdown', e=>{ joyId = e.pointerId; joy.setPointerCapture(e.pointerId); joyMove(e); e.stopPropagation(); });
+    joy.addEventListener('pointermove', e=>{ if(e.pointerId===joyId) joyMove(e); });
+    const joyEnd = e=>{ if(e.pointerId!==joyId) return; joyId = null; input.joyX = input.joyZ = 0; knob.style.transform = ''; };
+    joy.addEventListener('pointerup', joyEnd); joy.addEventListener('pointercancel', joyEnd);
+    document.getElementById('castle-act').addEventListener('click', ()=>{ if(panelStation === -1) interact(); });
+    if(window.matchMedia && window.matchMedia('(pointer: coarse)').matches) document.getElementById('castle-root').classList.add('castle-touch-on');
+  }
+
+  /* ---------- station markers & floating memory cards ---------- */
+  function palace(){ return DB.palaces.find(p=>p.id===palaceId); }
+  function wrapLines(g, text, maxW, maxLines){
+    const words = String(text).split(/\s+/), lines = [];
+    let line = '';
+    for(const w of words){
+      const test = line ? line + ' ' + w : w;
+      if(g.measureText(test).width > maxW && line){ lines.push(line); line = w; } else line = test;
+      if(lines.length === maxLines) break;
+    }
+    if(lines.length < maxLines && line) lines.push(line);
+    if(lines.length === maxLines && words.join(' ').length > lines.join(' ').length) lines[maxLines-1] = lines[maxLines-1].replace(/\s*\S*$/, '') + '…';
+    return lines;
+  }
+  function badgeTexture(n){
+    return canvasTex(128, (g,s)=>{
+      g.fillStyle = 'rgba(20,18,14,.85)'; g.beginPath(); g.arc(s/2, s/2, s/2-6, 0, Math.PI*2); g.fill();
+      g.strokeStyle = '#cda13a'; g.lineWidth = 6; g.stroke();
+      g.fillStyle = '#f3e7c4'; g.font = 'bold 54px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(n), s/2, s/2 + 3);
+    });
+  }
+  function cardTexture(s, l, onReady){
+    const c = document.createElement('canvas'); c.width = 512; c.height = 256;
+    const g = c.getContext('2d');
+    const tex = new THREE.CanvasTexture(c);
+    const draw = (img)=>{
+      g.clearRect(0,0,512,256);
+      g.fillStyle = '#efe3c2'; g.fillRect(4,4,504,248);
+      g.strokeStyle = '#8a6a2a'; g.lineWidth = 6; g.strokeRect(6,6,500,244);
+      let x0 = 26;
+      if(img){ const h = 200, w = Math.min(200, img.width*h/img.height); g.drawImage(img, 22, 28, w, h); x0 = 34 + w; }
+      g.fillStyle = '#7a5a20'; g.font = '600 20px Georgia, serif';
+      g.fillText(`${s.n} · ${s.title}`.slice(0, 40), x0, 44);
+      g.fillStyle = '#2a2014'; g.font = '30px Georgia, serif';
+      const text = (l.content && l.content.text) || (img ? '' : '');
+      wrapLines(g, text, 512 - x0 - 24, 5).forEach((ln, i)=>g.fillText(ln, x0, 92 + i*36));
+      tex.needsUpdate = true;
+      if(onReady) onReady();
+    };
+    if(l.image){ const img = new Image(); img.onload = ()=>draw(img); img.onerror = ()=>draw(null); img.src = l.image; draw(null); }
+    else draw(null);
+    return tex;
+  }
+  const orbTex = ()=>glowTexture('rgba(255,210,110,1)');
+  function buildStations(){
+    CASTLE_STATIONS.forEach((s, i)=>{
+      placeProp(s);
+      const meta = PROP_META[s.prop] || {};
+      const rp = ringPos(s);
+      const ringMat = new THREE.MeshBasicMaterial({ color:0x6cabd6, transparent:true, opacity:0.6, depthWrite:false, side:THREE.DoubleSide });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.92, 40), ringMat);
+      ring.rotation.x = -Math.PI/2; ring.position.set(rp.x, 0.04, rp.z);
+      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 32), new THREE.MeshBasicMaterial({ color:0x6cabd6, transparent:true, opacity:0.12, depthWrite:false }));
+      disc.rotation.x = -Math.PI/2; disc.position.set(rp.x, 0.035, rp.z);
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(s.n), transparent:true, depthWrite:false }));
+      badge.scale.set(0.55, 0.55, 1); badge.position.set(s.x, meta.h || 3, s.z);
+      const card = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthWrite:false }));
+      card.scale.set(2.6, 1.3, 1); card.position.set(s.x, (meta.h || 3) + 1.0, s.z); card.visible = false;
+      const orb = new THREE.Sprite(new THREE.SpriteMaterial({ map: orbTex(), blending:THREE.AdditiveBlending, transparent:true, depthWrite:false }));
+      orb.scale.set(0.9, 0.9, 1); orb.position.set(s.x, (meta.h || 3) + 0.7, s.z); orb.visible = false;
+      scene.add(ring, disc, badge, card, orb);
+      stationViews[i] = { s, rp, ring, ringMat, disc, badge, card, orb, cardKey:null };
+    });
+  }
+  function recallTargetIdx(){ return recall && recall.pos < recall.order.length ? recall.order[recall.pos] : -1; }
+  function refreshStation(i){
+    const sv = stationViews[i], p = palace(); if(!sv || !p) return;
+    const l = p.loci[i], filled = isLocusFilled(l);
+    let color = filled ? 0xcda13a : 0x6cabd6, opacity = filled ? 0.75 : 0.45, showCard = false, showOrb = false;
+    if(mode === 'recall'){
+      const rpos = recall ? recall.order.indexOf(i) : -1;
+      const done = rpos >= 0 && rpos < recall.pos;
+      if(i === recallTargetIdx()){ color = 0xfff1c0; opacity = 0.95; showOrb = true; }
+      else if(done){ color = recall.marks[rpos] ? 0x82b98d : 0xd3766a; opacity = 0.8; showCard = true; }
+      else if(filled){ color = 0xcda13a; opacity = 0.35; showOrb = true; }
+      else { opacity = 0.12; }
+      if(panelStation === i && recall && recall.revealed) { showCard = true; showOrb = false; }
+    } else {
+      showCard = filled;
+    }
+    sv.ringMat.color.setHex(color); sv.ringMat.opacity = opacity;
+    sv.disc.material.color.setHex(color);
+    sv.card.visible = showCard; sv.orb.visible = showOrb && !showCard;
+    if(showCard){
+      const key = ((l.content && l.content.text) || '') + '|' + (l.image ? l.image.length : 0);
+      if(sv.cardKey !== key){
+        if(sv.card.material.map) sv.card.material.map.dispose();
+        sv.card.material.map = cardTexture(sv.s, l); sv.card.material.needsUpdate = true; sv.cardKey = key;
+      }
+    }
+  }
+  function refreshAllStations(){ stationViews.forEach((_, i)=>refreshStation(i)); }
+  function animateStations(t){
+    const target = recallTargetIdx();
+    stationViews.forEach((sv, i)=>{
+      sv.orb.position.y = (PROP_META[sv.s.prop].h || 3) + 0.7 + Math.sin(t*2 + i)*0.08;
+      if(i === target || i === nearbyStation){ const k = 1 + Math.sin(t*5)*0.08; sv.ring.scale.set(k, k, k); }
+      else sv.ring.scale.set(1, 1, 1);
+    });
+  }
+
+  /* ---------- proximity & HUD ---------- */
+  let nearbyStation = -1, lastRoom = null, mapTick = 0;
+  function updateNearby(){
+    let best = -1, bestD = INTERACT_R;
+    stationViews.forEach((sv, i)=>{ const d = Math.hypot(P.x - sv.rp.x, P.z - sv.rp.z); if(d < bestD){ bestD = d; best = i; } });
+    nearbyStation = best;
+  }
+  function nextEmptyIdx(){
+    const p = palace(); if(!p) return -1;
+    return p.loci.findIndex(l=>!isLocusFilled(l));
+  }
+  const $ = id=>document.getElementById(id);
+  function hud(){
+    const p = palace(); if(!p) return;
+    const room = roomAtWorld(P.x, P.z); if(room) lastRoom = room;
+    $('castle-room-label').textContent = lastRoom ? lastRoom.name : '';
+    const filledCount = p.loci.filter(isLocusFilled).length;
+    let targetIdx = -1, label = '', text = '';
+    if(mode === 'recall'){
+      targetIdx = recallTargetIdx();
+      $('castle-mode-label').textContent = `RECALL WALK · ${Math.min(recall.pos+1, recall.order.length)} OF ${recall.order.length}`;
+      label = 'WALK TO'; text = targetIdx >= 0 ? `${CASTLE_STATIONS[targetIdx].n} · ${CASTLE_STATIONS[targetIdx].title}` : 'Walk complete';
+    } else {
+      targetIdx = nextEmptyIdx();
+      $('castle-mode-label').textContent = `${p.name.toUpperCase()} · ${filledCount}/${p.loci.length} MEMORIES`;
+      label = 'NEXT EMPTY STATION'; text = targetIdx >= 0 ? `${CASTLE_STATIONS[targetIdx].n} · ${CASTLE_STATIONS[targetIdx].title} (${castleRoomName(CASTLE_STATIONS[targetIdx].room)})` : 'Every station holds a memory';
+    }
+    $('castle-target-label').textContent = label; $('castle-target-text').textContent = text;
+    const arrow = $('castle-arrow');
+    if(targetIdx >= 0){
+      const rp = stationViews[targetIdx].rp, dx = rp.x - P.x, dz = rp.z - P.z;
+      const fx = -Math.sin(cam.yaw), fz = -Math.cos(cam.yaw), rx = -fz, rz = fx;
+      arrow.style.transform = `rotate(${Math.atan2(dx*rx + dz*rz, dx*fx + dz*fz)}rad)`; arrow.style.opacity = 1;
+    } else arrow.style.opacity = 0;
+    const prompt = $('castle-prompt');
+    if(nearbyStation >= 0 && panelStation === -1){
+      const s = CASTLE_STATIONS[nearbyStation], filled = isLocusFilled(p.loci[nearbyStation]);
+      let html;
+      if(mode === 'recall'){
+        if(nearbyStation === targetIdx) html = `<kbd>E</kbd> Recall station ${s.n} · ${escapeHtml(s.title)}`;
+        else if(targetIdx >= 0) html = `Not this one yet — the route goes to station ${CASTLE_STATIONS[targetIdx].n} next`;
+        else html = `${escapeHtml(s.title)}`;
+      } else html = `<kbd>E</kbd> ${filled ? 'See or change the memory at' : 'Leave a memory at'} ${s.n} · ${escapeHtml(s.title)}`;
+      prompt.innerHTML = html; prompt.classList.add('show');
+    } else prompt.classList.remove('show');
+    $('castle-btn-mode').textContent = mode === 'recall' ? 'End recall walk' : 'Start recall walk';
+    if(++mapTick % 4 === 0 || mapBig) drawMap();
+  }
+
+  /* ---------- the map ---------- */
+  function mapGeom(c){ const S = c.width, sc = S / (Math.max(CASTLE_GRID_W, CASTLE_GRID_H)*T); return { S, sc, oy: (S - CASTLE_GRID_H*T*sc)/2 }; }
+  function drawMap(){
+    const c = $('castle-map'), g = c.getContext('2d'), { S, sc, oy } = mapGeom(c), p = palace();
+    g.fillStyle = '#d9c9a3'; g.fillRect(0,0,S,S);
+    g.fillStyle = '#efe2bf';
+    for(let z=0; z<CASTLE_GRID_H; z++) for(let x=0; x<CASTLE_GRID_W; x++) if(cellAt(x,z)!==-1) g.fillRect(x*T*sc, oy + z*T*sc, T*sc+0.6, T*sc+0.6);
+    g.strokeStyle = '#6a4a1a'; g.lineWidth = 1.4;
+    for(let z=0; z<CASTLE_GRID_H; z++) for(let x=0; x<CASTLE_GRID_W; x++){
+      if(cellAt(x,z)===-1) continue;
+      const px = x*T*sc, py = oy + z*T*sc, w = T*sc;
+      g.beginPath();
+      if(cellAt(x,z-1)===-1){ g.moveTo(px,py); g.lineTo(px+w,py); }
+      if(cellAt(x,z+1)===-1){ g.moveTo(px,py+w); g.lineTo(px+w,py+w); }
+      if(cellAt(x-1,z)===-1){ g.moveTo(px,py); g.lineTo(px,py+w); }
+      if(cellAt(x+1,z)===-1){ g.moveTo(px+w,py); g.lineTo(px+w,py+w); }
+      g.stroke();
+    }
+    g.fillStyle = 'rgba(90,60,20,.55)'; g.font = `italic ${Math.round(S/30)}px Georgia, serif`; g.textAlign = 'center';
+    CASTLE_ROOMS.forEach(r=>g.fillText(r.name, (r.x0 + r.x1 + 1)/2*T*sc, oy + (r.z0 + 0.9)*T*sc));
+    const target = mode === 'recall' ? recallTargetIdx() : nextEmptyIdx();
+    const dotR = Math.max(4, S/48);
+    g.font = `bold ${Math.round(dotR*1.1)}px sans-serif`; g.textBaseline = 'middle';
+    stationViews.forEach((sv, i)=>{
+      const l = p.loci[i], filled = isLocusFilled(l), x = sv.rp.x*sc, y = oy + sv.rp.z*sc;
+      let fill = filled ? '#cda13a' : '#fbf6e8';
+      if(mode === 'recall'){ const rpos = recall.order.indexOf(i); if(rpos >= 0 && rpos < recall.pos) fill = recall.marks[rpos] ? '#82b98d' : '#d3766a'; else if(!filled) fill = 'rgba(251,246,232,.4)'; }
+      g.beginPath(); g.arc(x, y, dotR, 0, Math.PI*2); g.fillStyle = fill; g.fill();
+      g.strokeStyle = i === target ? '#1d5fa0' : '#6a4a1a'; g.lineWidth = i === target ? 3 : 1; g.stroke();
+      if(mapBig || dotR > 5){ g.fillStyle = '#2a1a08'; g.fillText(String(sv.s.n), x, y+0.5); }
+    });
+    g.save(); g.translate(P.x*sc, oy + P.z*sc); g.rotate(-P.yaw + Math.PI);
+    g.fillStyle = '#b02a2a'; g.beginPath(); const a = Math.max(5, S/40); g.moveTo(0, -a*1.3); g.lineTo(a*0.8, a); g.lineTo(-a*0.8, a); g.closePath(); g.fill();
+    g.restore();
+  }
+  function toggleMap(){
+    mapBig = !mapBig;
+    const c = $('castle-map');
+    c.classList.toggle('big', mapBig);
+    c.width = c.height = mapBig ? 760 : 380;
+    drawMap();
+  }
+  function onMapClick(e){
+    if(!mapBig){ toggleMap(); return; }
+    const c = $('castle-map'), r = c.getBoundingClientRect(), { sc, oy } = mapGeom(c);
+    const mx = (e.clientX - r.left) * c.width / r.width, my = (e.clientY - r.top) * c.height / r.height;
+    if(mode === 'study'){
+      const hit = stationViews.findIndex(sv=>Math.hypot(sv.rp.x*sc - mx, oy + sv.rp.z*sc - my) < Math.max(10, c.width/40));
+      if(hit >= 0){ teleportTo(hit); toggleMap(); return; }
+    }
+    toggleMap();
+  }
+  function teleportTo(i){
+    const sv = stationViews[i];
+    P.x = sv.rp.x; P.z = sv.rp.z; P.speed = 0;
+    P.yaw = Math.atan2(sv.s.x - sv.rp.x, sv.s.z - sv.rp.z);
+    cam.yaw = P.yaw + Math.PI; cam.pitch = 0.3;
+    updateNearby();
+  }
+
+  /* ---------- the memory panel ---------- */
+  function openPanel(i, html){
+    panelStation = i;
+    const el = $('castle-panel'); el.innerHTML = html; el.classList.add('open');
+    for(const k in keys) keys[k] = false;
+    refreshStation(i);
+  }
+  function closePanel(){
+    const i = panelStation;
+    panelStation = -1;
+    $('castle-panel').classList.remove('open'); $('castle-panel').innerHTML = '';
+    if(i >= 0) refreshStation(i);
+  }
+  function panelHead(s, extra){
+    return `<div class="mono" style="font-size:10.5px; color:var(--ink-mute); letter-spacing:.08em;">${extra} · ${escapeHtml(castleRoomName(s.room).toUpperCase())}</div>
+      <h3 style="margin-top:6px; font-size:21px;">${s.n}. ${escapeHtml(s.title)}</h3>`;
+  }
+  function openStudyPanel(i){
+    const p = palace(), l = p.loci[i], s = CASTLE_STATIONS[i];
+    openPanel(i, `
+      ${panelHead(s, `STATION ${s.n} OF ${CASTLE_STATIONS.length}`)}
+      <p style="color:var(--ink-mute); font-size:12.5px; margin:8px 0 12px;">Make it vivid: picture what you're remembering doing something loud, huge or ridiculous right here at the ${escapeHtml(s.title.toLowerCase())}.</p>
+      ${l.image ? `<img src="${l.image}" class="cp-thumb" style="width:100%; max-height:200px; object-fit:cover; border-radius:3px; border:1px solid var(--line); margin-bottom:10px;">` : ''}
+      <textarea id="cp-text" rows="4" placeholder="What are you leaving here? A word, a fact, a quote, a name…">${escapeHtml((l.content && l.content.text) || '')}</textarea>
+      ${l.content && l.content.source ? `<div class="pill pill-gold" style="margin-top:8px;">from ${escapeHtml(l.content.source)}</div>` : ''}
+      <div class="btn-row" style="margin-top:10px; align-items:center;">
+        <label class="btn btn-sm btn-ghost" style="cursor:pointer;">${l.image ? 'Replace picture' : '+ Add a picture'}
+          <input type="file" accept="image/*" id="cp-photo" style="position:absolute; width:1px; height:1px; opacity:0; overflow:hidden;"></label>
+        ${l.image ? `<button class="btn btn-sm btn-danger" id="cp-photo-remove">Remove picture</button>` : ''}
+        <span id="cp-status" style="font-size:11px; color:var(--ink-mute);"></span>
+      </div>
+      <div class="modal-close-row">
+        ${isLocusFilled(l) ? `<button class="btn btn-ghost btn-sm" id="cp-clear" style="margin-right:auto;">Empty this station</button>` : ''}
+        <button class="btn btn-ghost btn-sm" id="cp-close">Close</button>
+        <button class="btn btn-primary btn-sm" id="cp-save">Save memory</button>
+      </div>`);
+    const ta = $('cp-text');
+    setTimeout(()=>{ if(ta && panelStation === i) ta.focus(); }, 30);
+    const commit = async ()=>{
+      const val = ta.value.trim(), cur = p.loci[i];
+      const old = (cur.content && cur.content.text) || '';
+      if(val === old) return;
+      await updateLocus(cur.id, { content: val ? { text: val, source: (cur.content && cur.content.source) || null } : null });
+      refreshStation(i);
+    };
+    ta.addEventListener('change', commit);
+    $('cp-save').onclick = async ()=>{ await commit(); closePanel(); toast(`Saved at station ${s.n} — ${s.title}`); };
+    $('cp-close').onclick = async ()=>{ await commit(); closePanel(); };
+    const clr = $('cp-clear');
+    if(clr) clr.onclick = async ()=>{ await updateLocus(l.id, { content:null, image:null }); closePanel(); };
+    $('cp-photo').addEventListener('change', async e=>{
+      const file = e.target.files[0]; if(!file) return;
+      $('cp-status').textContent = 'Processing picture…';
+      try{ await commit(); await updateLocus(l.id, { image: await compressImageFile(file) }); openStudyPanel(i); }
+      catch(err){ $('cp-status').textContent = 'Could not use that picture — ' + err.message; }
+    });
+    const rm = $('cp-photo-remove');
+    if(rm) rm.onclick = async ()=>{ await commit(); await updateLocus(l.id, { image:null }); openStudyPanel(i); };
+  }
+
+  /* ---------- recall walk ---------- */
+  function startRecall(){
+    const p = palace();
+    const order = p.loci.map((l,i)=>isLocusFilled(l) ? i : -1).filter(i=>i>=0);
+    if(order.length === 0){ toast('Leave a memory at a station first, then walk the route to recall it'); return false; }
+    closePanel();
+    recall = { order, pos:0, marks:[], revealed:false };
+    mode = 'recall';
+    teleportStart();
+    refreshAllStations();
+    return true;
+  }
+  function stopRecall(silent){
+    if(recall && recall.pos > 0 && recall.pos < recall.order.length && !silent) toast('Recall walk ended early — nothing was logged');
+    recall = null; mode = 'study';
+    closePanel(); refreshAllStations();
+  }
+  function openRecallPanel(i){
+    const p = palace(), l = p.loci[i], s = CASTLE_STATIONS[i];
+    const head = panelHead(s, `RECALL ${recall.pos+1} OF ${recall.order.length}`);
+    if(!recall.revealed){
+      openPanel(i, `${head}
+        <p style="color:var(--ink-dim); font-size:13.5px; margin-top:12px;">What did you leave here? Picture the scene at the ${escapeHtml(s.title.toLowerCase())}, say it out loud, then reveal.</p>
+        <div class="modal-close-row">
+          <button class="btn btn-ghost btn-sm" id="cr-skip" style="margin-right:auto;">I can't remember</button>
+          <button class="btn btn-ghost btn-sm" id="cr-later">Not yet</button>
+          <button class="btn btn-primary btn-sm" id="cr-reveal">Reveal</button>
+        </div>`);
+      $('cr-reveal').onclick = ()=>{ recall.revealed = true; openRecallPanel(i); };
+      $('cr-later').onclick = closePanel;
+      $('cr-skip').onclick = ()=>markRecall(false);
+    } else {
+      openPanel(i, `${head}
+        <div style="margin-top:14px; border:1px solid var(--line); border-radius:3px; padding:14px; background:var(--surface-2);">
+          ${l.image ? `<img src="${l.image}" style="width:100%; max-height:200px; object-fit:cover; border-radius:3px; margin-bottom:10px;">` : ''}
+          <div style="font-size:14px;">${escapeHtml((l.content && l.content.text) || '')}</div>
+        </div>
+        <div class="modal-close-row">
+          <button class="btn btn-sm" style="border-color:var(--red); color:var(--red);" id="cr-wrong">Missed it</button>
+          <button class="btn btn-sm" style="border-color:var(--green); color:var(--green);" id="cr-right">Got it right</button>
+        </div>`);
+      $('cr-right').onclick = ()=>markRecall(true);
+      $('cr-wrong').onclick = ()=>markRecall(false);
+    }
+  }
+  async function markRecall(ok){
+    recall.marks[recall.pos] = ok;
+    recall.pos++; recall.revealed = false;
+    closePanel(); refreshAllStations();
+    if(recall.pos >= recall.order.length) await finishRecall();
+  }
+  async function finishRecall(){
+    const p = palace();
+    const correct = recall.marks.filter(Boolean).length, total = recall.order.length;
+    // reuse the 2D walk's logging + SM-2 scheduling so both routes stay identical
+    walkState = { mode:'recall', palace: Object.assign({}, p, { loci: recall.order.map(i=>p.loci[i]) }), marks: recall.marks.slice() };
+    await finishWalk();
+    const missed = recall.order.filter((_, k)=>!recall.marks[k]).map(i=>CASTLE_STATIONS[i]);
+    const srs = srsStatus(p.srs);
+    openPanel(-2, `
+      <div class="mono" style="font-size:10.5px; color:var(--ink-mute); letter-spacing:.08em;">RECALL WALK COMPLETE</div>
+      <h3 style="margin-top:6px; font-size:24px;">${correct} of ${total} remembered</h3>
+      <p style="color:var(--ink-dim); font-size:13px; margin-top:8px;">${srs.text}. Logged in your history.</p>
+      ${missed.length ? `<p style="font-size:12.5px; color:var(--ink-mute); margin-top:10px;">Worth rebuilding with a stronger image: ${missed.map(s=>`${s.n} · ${escapeHtml(s.title)}`).join(', ')}</p>` : ''}
+      <div class="modal-close-row">
+        <button class="btn btn-ghost btn-sm" id="cf-exit">Exit castle</button>
+        <button class="btn btn-sm" id="cf-study">Keep exploring</button>
+        <button class="btn btn-gold btn-sm" id="cf-again">Walk it again</button>
+      </div>`);
+    $('cf-exit').onclick = ()=>{ recall = null; exit(); };
+    $('cf-study').onclick = ()=>stopRecall(true);
+    $('cf-again').onclick = ()=>{ closePanel(); startRecall(); };
+  }
+  function interact(){
+    if(nearbyStation < 0) return;
+    if(mode === 'recall'){
+      if(nearbyStation === recallTargetIdx()) openRecallPanel(nearbyStation);
+      return;
+    }
+    openStudyPanel(nearbyStation);
+  }
+  function teleportStart(){ placeAt(CASTLE_START.x, CASTLE_START.z, CASTLE_START.yaw); }
+  function placeAt(x, z, yaw){ P.x = x; P.z = z; P.yaw = yaw; P.speed = 0; cam.yaw = yaw + Math.PI; cam.pitch = 0.32; if(stationViews.length) updateNearby(); }
+
+  /* ---------- lifecycle ---------- */
+  function build(){
+    if(built) return true;
+    if(typeof THREE === 'undefined') return false;
+    try{
+      renderer = new THREE.WebGLRenderer({ antialias:true });
+    }catch(e){ return false; }
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    canvasWrap = $('castle-canvas-wrap');
+    canvasWrap.appendChild(renderer.domElement);
+    renderer.domElement.setAttribute('tabindex', '0');
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x07080c);
+    scene.fog = new THREE.Fog(0x0b0c12, 22, 75);
+    camera = new THREE.PerspectiveCamera(62, 1, 0.1, 500);
+    clock = new THREE.Clock();
+    makeTextures(); buildShell(); buildDecor(); buildStations(); buildHero();
+    wireInput(renderer.domElement);
+    $('castle-map').addEventListener('click', onMapClick);
+    window.addEventListener('resize', resize);
+    built = true;
+    return true;
+  }
+  function resize(){
+    if(!built) return;
+    const w = canvasWrap.clientWidth || window.innerWidth, h = canvasWrap.clientHeight || window.innerHeight;
+    renderer.setSize(w, h, false); camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+  function frame(){
+    if(!running) return;
+    raf = requestAnimationFrame(frame);
+    // slow devices get several small movement steps per frame rather than slow walking
+    const dt = Math.min(0.25, clock.getDelta()), t = clock.elapsedTime;
+    for(let left = dt; left > 1e-4; left -= 0.05) movePlayer(Math.min(0.05, left));
+    updateNearby(); animateHero(Math.min(0.05, dt)); updateCamera(dt);
+    for(const f of animated) f(t, dt);
+    animateStations(t); hud();
+    renderer.render(scene, camera);
+  }
+  function enter(id, startMode){
+    const p = DB.palaces.find(x=>x.id===id);
+    if(!p || !isCastle(p)) return;
+    if(ensureCastleLoci(p)) savePalaces();
+    palaceId = id; currentPalaceId = id;
+    const root = $('castle-root');
+    root.classList.add('open'); document.body.style.overflow = 'hidden';
+    if(!build()){
+      $('castle-fallback').classList.add('show');
+      $('castle-fallback-msg').textContent = typeof THREE === 'undefined'
+        ? 'The 3D library (Three.js) could not be loaded — it comes from the internet the first time you open the castle. Check your connection and try again.'
+        : "This browser couldn't start WebGL, which the castle needs to draw in 3D.";
+      return;
+    }
+    $('castle-fallback').classList.remove('show');
+    recall = null; mode = 'study'; mapBig = false; $('castle-map').classList.remove('big');
+    teleportStart(); closePanel(); refreshAllStations(); resize();
+    if(startMode === 'recall') startRecall();
+    running = true; clock.getDelta(); cancelAnimationFrame(raf); frame();
+    renderer.domElement.focus();
+  }
+  function exit(){
+    running = false; cancelAnimationFrame(raf);
+    if(recall) stopRecall();
+    closePanel();
+    for(const k in keys) keys[k] = false;
+    $('castle-root').classList.remove('open'); $('castle-fallback').classList.remove('show');
+    document.body.style.overflow = '';
+    go('palaces','palaces'); renderPalaceList(); renderDashboard();
+  }
+  function wireChrome(){
+    $('castle-btn-exit').addEventListener('click', exit);
+    $('castle-btn-mode').addEventListener('click', ()=>{ if(mode === 'recall') stopRecall(); else startRecall(); });
+    $('castle-fallback-exit').addEventListener('click', exit);
+    $('castle-fallback-list').addEventListener('click', ()=>{ const id = palaceId; exit(); openPalace(id); });
+  }
+
+  return {
+    enter, exit, wireChrome, ringPos, walkable, cellAt,
+    debug: {
+      state: ()=>({ x:P.x, z:P.z, yaw:P.yaw, mode, nearby:nearbyStation, panel:panelStation, running, built,
+        room: (roomAtWorld(P.x, P.z) || {}).id || null, recall: recall ? { pos:recall.pos, total:recall.order.length, marks:recall.marks.slice() } : null,
+        drawCalls: renderer ? renderer.info.render.calls : 0, triangles: renderer ? renderer.info.render.triangles : 0 }),
+      teleportTo, placeAt, interact, keys, blocked, cam
+    }
+  };
+})();
+function enterCastle(id, mode){ castleEngine.enter(id, mode); }
+window.addEventListener('DOMContentLoaded', ()=>castleEngine.wireChrome());
 </script>
 </body>
 </html>
