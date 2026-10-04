@@ -2,7 +2,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
 (async () => {
-  const html = fs.readFileSync('mnemosyne.html', 'utf-8');
+  const html = fs.readFileSync('index.html', 'utf-8');
   const errors = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
@@ -24,16 +24,18 @@ const fs = require('fs');
   // ---- layout data is sane ----
   check('40 castle stations across 8 rooms', win.eval('CASTLE_STATIONS.length') === 40 && win.eval('CASTLE_ROOMS.length') === 8);
   check('5 stations in every room', win.eval('CASTLE_ROOMS.every(r=>CASTLE_STATIONS.filter(s=>s.room===r.id).length===5)'));
-  check('every station prop has a 3D builder', win.eval('CASTLE_STATIONS.every(s=>typeof s.prop==="string")') && html.includes('PROPS = {'));
+  const propsSrc = fs.readFileSync('src/castle/props.js', 'utf-8');
+  check('every station prop has a 3D builder in src/castle/props.js', win.eval('CASTLE_STATIONS.map(s=>s.prop)').every(p => new RegExp('\\n    ' + p + '\\(\\)\\{').test(propsSrc)));
+  check('no Harry Potter-specific props or names remain', !/hat\(\)|brooms|hourglasses|owl|Potions|Astronomy/.test(propsSrc + win.eval('JSON.stringify(CASTLE_STATIONS)+JSON.stringify(CASTLE_ROOMS)')));
   check('every station prop sits inside its own room',
     win.eval(`CASTLE_STATIONS.every(s=>{ const r = CASTLE_ROOMS.find(r=>r.id===s.room); return s.x>=r.x0*CASTLE_TILE && s.x<=(r.x1+1)*CASTLE_TILE && s.z>=r.z0*CASTLE_TILE && s.z<=(r.z1+1)*CASTLE_TILE; })`));
-  check('every station circle is on open floor', win.eval('CASTLE_STATIONS.every(s=>{ const p = castleEngine.ringPos(s); return castleEngine.walkable(p.x, p.z); })'));
+  check('every station circle is on open floor', win.eval('CASTLE_STATIONS.every(s=>{ const p = castleRingPos(s); return castleWalkable(p.x, p.z); })'));
   check('station titles are all distinct (no two stations blur together)', win.eval('new Set(CASTLE_STATIONS.map(s=>s.title.toLowerCase())).size') === 40);
 
   // ---- Palaces tab: castle hero card ----
   win.eval("go('palaces','palaces'); renderPalaceList();");
   await wait(30);
-  check('castle hero card on the Palaces tab', doc.getElementById('palace-list').textContent.includes('The Castle') && !!doc.getElementById('btn-enter-castle-hero'));
+  check('castle hero card on the Palaces tab', doc.getElementById('palace-list').textContent.includes('The Keep of Mnemosyne') && !!doc.getElementById('btn-enter-castle-hero'));
   check('hero offers to build a castle when none exists', doc.getElementById('btn-enter-castle-hero').textContent.includes('Build your castle'));
 
   // ---- create a castle palace through the New palace modal ----

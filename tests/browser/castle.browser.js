@@ -1,12 +1,17 @@
 // Real-browser test for the 3D castle: WebGL rendering, walking, collisions,
 // leaving memories at stations and a full recall walk. jsdom can't run WebGL,
 // so this one drives headless Chromium through Playwright.
-// Run from the repo root: node tests/browser/castle.browser.js
+// Run from the repo root after `npm run build`: node tests/browser/castle.browser.js
+// (npm run test:browser does both). It serves dist/ with Vite's preview server.
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
 (async () => {
+  const { preview } = await import(path.resolve('node_modules/vite/dist/node/index.js'));
+  const PORT = 4400 + Math.floor(Math.random() * 400);
+  const server = await preview({ root: process.cwd(), configFile: path.resolve('vite.config.mjs'), preview: { port: PORT, strictPort: true, open: false }, logLevel: 'silent' });
+  const BASE = `http://localhost:${PORT}/`;
   const shotDir = process.env.SHOT_DIR || path.resolve('tests/browser/screenshots');
   fs.mkdirSync(shotDir, { recursive: true });
   const browser = await chromium.launch({
@@ -17,32 +22,38 @@ const fs = require('fs');
   const errors = [];
   page.on('pageerror', e => errors.push(String(e)));
   page.on('console', m => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(m.text()); });
-  // Serve Three.js locally so the test doesn't depend on the CDN; drop other network requests.
-  const threeFile = require.resolve('three/build/three.min.js');
-  await page.route('**/*', route => {
-    const url = route.request().url();
-    if (url.includes('three.js/r128/three.min.js')) return route.fulfill({ path: threeFile, contentType: 'application/javascript' });
-    if (url.startsWith('file:')) return route.continue();
-    return route.abort();
-  });
+  // Everything the castle needs is bundled; block other network requests (fonts, pdf.js) for speed.
+  await page.route('**/*', route => route.request().url().startsWith(BASE) ? route.continue() : route.abort());
+  // Low graphics keeps software-rendered WebGL fast enough for the walking checks.
+  await page.addInitScript(() => { try { localStorage.setItem('mnemosyne:castleQuality', 'low'); } catch (e) {} });
 
   let failed = 0;
   const check = (label, cond) => { console.log((cond ? 'PASS ' : 'FAIL ') + label); if (!cond) failed++; };
   const state = () => page.evaluate(() => castleEngine.debug.state());
   const wait = ms => page.waitForTimeout(ms);
+  // hold keys until a condition holds (or time runs out): robust on slow software rendering
+  const holdUntil = async (codes, cond, ms) => {
+    for (const c of codes) await page.keyboard.down(c);
+    const t0 = Date.now(); let ok = false;
+    while (Date.now() - t0 < ms) { if (await page.evaluate(cond)) { ok = true; break; } await wait(100); }
+    for (const c of codes) await page.keyboard.up(c);
+    return ok;
+  };
 
-  await page.goto('file://' + path.resolve('mnemosyne.html'));
-  await page.waitForFunction(() => typeof castleEngine !== 'undefined' && typeof THREE !== 'undefined');
+  await page.goto(BASE);
+  await page.waitForFunction(() => !!window.castleEngine);
 
   // ---- enter from the Palaces hero card ----
   await page.click('.tab-btn[data-view="palaces"]');
   check('castle hero card shown on Palaces tab', await page.isVisible('#btn-enter-castle-hero'));
   await page.click('#btn-enter-castle-hero');
-  await page.waitForFunction(() => castleEngine.debug.state().running);
+  await page.waitForFunction(() => castleEngine.debug.state().running, null, { timeout: 120000 });
   await wait(600);
   let st = await state();
   check('castle overlay open and render loop running', st.running && await page.isVisible('#castle-root'));
   check('scene actually draws (WebGL draw calls > 50)', st.drawCalls > 50);
+  check('static geometry merged into few draw calls (< 400 at low quality)', st.drawCalls < 400);
+  check('castle has real light sources (torches, fires, chandeliers)', st.lights >= 25);
   check('a castle palace with 40 stations was created', await page.evaluate(() => DB.palaces.filter(isCastle).length === 1 && DB.palaces.find(isCastle).loci.length === 40));
   check('player starts in the courtyard', st.room === 'courtyard');
   check('player starts facing the gate, a few steps from station 1', st.nearby === -1 && Math.abs(st.yaw) < 0.01);
@@ -61,20 +72,21 @@ const fs = require('fs');
         seen.add(k); q.push([nx, nz]);
       }
     }
-    return CASTLE_STATIONS.map(s => { const r = castleEngine.ringPos(s); return { n: s.n, ok: !castleEngine.debug.blocked(r.x, r.z) && seen.has(key(r.x, r.z)) }; });
+    return CASTLE_STATIONS.map(s => { const r = castleRingPos(s); return { n: s.n, ok: !castleEngine.debug.blocked(r.x, r.z) && seen.has(key(r.x, r.z)) }; });
   });
   const unreachable = reach.filter(r => !r.ok).map(r => r.n);
   check('all 40 station circles are reachable by walking' + (unreachable.length ? ' (unreachable: ' + unreachable.join(',') + ')' : ''), unreachable.length === 0);
 
   // ---- walking with the keyboard moves the player, walls stop them ----
   const before = await state();
-  await page.keyboard.down('KeyW'); await wait(1500); await page.keyboard.up('KeyW');
+  await holdUntil(['KeyW'], () => castleEngine.debug.state().nearby === 0, 15000);
   st = await state();
-  check('holding W walks forward to the gate and its glowing circle', st.z > before.z + 1.5 && st.nearby === 0);
+
+  check('holding W walks forward to the gate and its glowing circle', st.z > before.z + 1 && st.nearby === 0);
   check('the gate itself blocks the way (no walking through props)', st.z < 58.6);
   // face north from the middle of the courtyard and run for the doorway
   await page.evaluate(() => castleEngine.debug.placeAt(34, 50, Math.PI));
-  await page.keyboard.down('KeyW'); await page.keyboard.down('ShiftLeft'); await wait(2500); await page.keyboard.up('ShiftLeft'); await page.keyboard.up('KeyW');
+  await holdUntil(['KeyW', 'ShiftLeft'], () => castleEngine.debug.state().room === 'entrance' && castleEngine.debug.state().z < 40, 20000);
   st = await state();
   check('player walks through the doorway into the Entrance Hall', st.room === 'entrance');
   await page.screenshot({ path: `${shotDir}/01b-entrance.png` });
@@ -167,9 +179,25 @@ const fs = require('fs');
   check('castle still renders at phone size', (await state()).drawCalls > 50);
   await page.screenshot({ path: `${shotDir}/06-phone.png` });
 
+  // ---- graphics + sound controls ----
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.click('#castle-btn-quality');
+  check('Graphics button cycles quality (low -> high)', (await state()).quality === 'high' && (await page.textContent('#castle-btn-quality')).includes('High'));
+  await page.click('#castle-btn-sound');
+  check('Sound button toggles', (await page.textContent('#castle-btn-sound')).includes('off'));
+  check('graphics choice is remembered', await page.evaluate(() => localStorage.getItem('mnemosyne:castleQuality')) === 'high');
+
+  // ---- high-quality tour screenshots of each room's character ----
+  for (const [name, idx] of [['10-courtyard', 1], ['11-great-hall', 12], ['12-library', 21], ['13-cellar', 26], ['14-observatory', 37]]) {
+    await page.evaluate(i => castleEngine.debug.teleportTo(i), idx);
+    await wait(Number(process.env.SHOT_WAIT || 6000));
+    await page.screenshot({ path: `${shotDir}/${name}.png` });
+  }
+
   check('no JavaScript errors', errors.length === 0);
   errors.forEach(e => console.log(' -', e));
   await browser.close();
+  server.httpServer.close();
   console.log(failed ? `\n${failed} check(s) failed` : '\nAll castle browser checks passed');
   process.exit(failed ? 1 : 0);
 })();

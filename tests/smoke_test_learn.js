@@ -2,7 +2,7 @@ const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
 (async () => {
-  const html = fs.readFileSync('mnemosyne.html', 'utf-8');
+  const html = fs.readFileSync('index.html', 'utf-8');
   const errors = [];
   const dom = new JSDOM(html, {
     runScripts: 'dangerously',
