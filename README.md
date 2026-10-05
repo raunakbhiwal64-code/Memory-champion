@@ -13,6 +13,8 @@ npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
 
+**Live site:** every push to `main` runs the tests, builds the app and publishes it to GitHub Pages (`.github/workflows/deploy-pages.yml`). In the repo, Settings → Pages → Source must be set to **GitHub Actions** once.
+
 `dist/` is a static site, so you can host it anywhere: GitHub Pages, Netlify, Vercel, or any web server. All paths are relative, so it also works from a sub-folder. All user data stays in the browser (`localStorage`, prefixed `mnemosyne:`), with no backend.
 
 The app has to be served over HTTP. Double-clicking `index.html` won't work, because browsers don't load ES modules from `file://`.
