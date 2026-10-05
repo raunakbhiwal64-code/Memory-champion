@@ -84,10 +84,32 @@ func _snapshot_daily() -> void:
 		DirAccess.remove_absolute(snaps[i])
 
 
+## An extra snapshot of the data exactly as it is now (before a replace or restore).
+func keep_copy(reason: String) -> void:
+	if not FileAccess.file_exists(save_path()):
+		return
+	var snap_dir := dir.path_join(SNAPSHOT_DIR)
+	DirAccess.make_dir_recursive_absolute(snap_dir)
+	var t := Time.get_datetime_dict_from_unix_time(int(Util.now_ms() / 1000.0) + Util._tz_offset_seconds())
+	DirAccess.copy_absolute(save_path(), snap_dir.path_join("mnemosyne-%s~%02d%02d%02d-%s.json" % [Util.day_key(Util.now_ms()), t.hour, t.minute, t.second, reason]))
+
+
+## A friendly name for a snapshot file.
+func snapshot_label(path: String) -> String:
+	var stem := path.get_file().trim_prefix("mnemosyne-").trim_suffix(".json")
+	if stem.contains("~"):
+		var parts := stem.split("~")
+		var time := parts[1].substr(0, 6)
+		return "Before an import, %s %s:%s" % [parts[0], time.substr(0, 2), time.substr(2, 2)]
+	return "Start of " + stem
+
+
 ## Newest first.
 func list_snapshots() -> Array:
 	var snap_dir := dir.path_join(SNAPSHOT_DIR)
 	var out := []
+	if not DirAccess.dir_exists_absolute(snap_dir):
+		return out
 	for f in DirAccess.get_files_at(snap_dir):
 		if f.begins_with("mnemosyne-") and f.ends_with(".json"):
 			out.append(snap_dir.path_join(f))
@@ -119,6 +141,8 @@ func import_text(text: String, mode: String) -> Dictionary:
 	var result := Backup.parse(text)
 	if not result.ok:
 		return result
+	if mode == "replace":
+		keep_copy("before-import")
 	var keep_settings: Dictionary = data.settings.duplicate()
 	data = result.data if mode == "replace" else Backup.merge(data, result.data)
 	data.settings = keep_settings

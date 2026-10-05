@@ -1,6 +1,6 @@
 extends Node
-## App-wide UI services: navigation between views, toasts and modal dialogs.
-## The main scene registers itself here on start.
+## App-wide UI services: navigation between views, toasts, modals and
+## confirmations. The main scene registers itself here on start.
 
 var main: Node = null
 
@@ -8,6 +8,11 @@ var main: Node = null
 func go(view: String, args: Dictionary = {}) -> void:
 	if main:
 		main.go(view, args)
+
+
+func refresh() -> void:
+	if main:
+		main.refresh_current()
 
 
 func toast(msg: String) -> void:
@@ -25,3 +30,10 @@ func open_modal(content: Control, wide: bool = false) -> void:
 func close_modal() -> void:
 	if main:
 		main.close_modal()
+
+
+func confirm(text: String, ok_label: String, on_ok: Callable, danger: bool = true) -> void:
+	if main:
+		main.confirm(text, ok_label, on_ok, danger)
+	else:
+		on_ok.call()
