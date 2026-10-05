@@ -353,6 +353,7 @@ details.lesson-card summary > span:first-of-type{flex:1;}
           <h1 class="view-title">History</h1>
           <p class="view-desc">Every session you've logged, most recent first.</p>
         </div>
+        <button class="btn btn-gold btn-sm" id="btn-export-backup" title="Save everything to a file you can keep, or import into the Mnemosyne app">Export backup</button>
         <button class="btn btn-ghost btn-sm" id="btn-clear-history">Clear log</button>
       </div>
       <div id="history-list"></div>
@@ -2427,6 +2428,23 @@ async function submitDrill(){
   renderDashboard();
 }
 
+/* ---------- Backup: one file holding everything, readable by the Mnemosyne app ---------- */
+function backupJson(){
+  const data = { palaces:DB.palaces, decks:DB.decks, history:DB.history, learn:DB.learn,
+    majorSystem:DB.majorSystem, pao:DB.pao, numberSystemPref:DB.numberSystemPref };
+  return JSON.stringify({ app:'mnemosyne', schema:1, exportedAt:Date.now(), data }, null, 1);
+}
+function exportBackup(){
+  const blob = new Blob([backupJson()], {type:'application/json'});
+  const a = document.createElement('a');
+  const d = new Date();
+  a.href = URL.createObjectURL(blob);
+  a.download = `mnemosyne-backup-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}.json`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  toast('Backup saved — keep it somewhere safe, or import it into the Mnemosyne app');
+}
+
 /* ============================================================
    INIT
    ============================================================ */
@@ -2439,6 +2457,7 @@ async function init(){
   wireCastleFallback();
   document.getElementById('btn-new-palace').addEventListener('click', showNewPalaceModal);
   document.getElementById('btn-new-deck').addEventListener('click', showNewDeckModal);
+  document.getElementById('btn-export-backup').addEventListener('click', exportBackup);
   document.getElementById('btn-clear-history').addEventListener('click', async ()=>{
     if(!confirm('Clear your entire training history? This cannot be undone.')) return;
     DB.history = [];
