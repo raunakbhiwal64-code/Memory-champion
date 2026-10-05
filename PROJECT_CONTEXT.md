@@ -10,7 +10,7 @@ Mnemosyne teaches memory technique (curriculum mostly grounded in Kevin Horsley'
 
 - **App shell + Vite**: `index.html` holds the CSS and the app logic as one classic inline script (no framework). The 3D castle engine is a set of ES modules in `src/castle/` bundled by Vite (`npm run dev` / `npm run build` → static `dist/`). The app must be served over HTTP; a static host is enough. (It was originally a single double-clickable `mnemosyne.html`; that changed when the castle moved to modern Three.js and needed a bundler.)
 - **Persistence**: `storageGet`/`storageSet` prefer `window.storage` (the Claude Artifacts runtime API) when present, and fall back to `localStorage` (prefixed `mnemosyne:`) otherwise — resolved, see "Persistence: resolved" below. The app is self-contained wherever it's opened.
-- **Dependencies**: Three.js r186 from npm (bundled), and `pdf.js` still loaded from cdnjs for PDF text extraction. A-Frame was tried for 360° photo viewing and deliberately removed (see "Reversed decisions" below).
+- **Dependencies**: Three.js r186 from npm (bundled), and `pdf.js` still loaded from cdnjs for PDF text extraction. Real CC0 assets from Poly Haven live in `public/assets` (about 22 MB, optimised by `scripts/fetch-assets.mjs`: WebP textures, meshopt GLB, simplified meshes) and stream in at runtime over the procedural stand-ins (`src/castle/assets.js`). A-Frame was tried for 360° photo viewing and deliberately removed (see "Reversed decisions" below).
 - **One live external API call**: the Library's "Suggest images (AI)" feature calls `https://api.anthropic.com/v1/messages` (model `claude-sonnet-4-6`) directly from the browser, no API key in the code. This works because the Claude Artifacts runtime injects auth for that specific endpoint. **Also won't work outside that runtime** without the developer supplying their own key/proxy.
 - **3D/media catalog** (`PALACE_CATALOG` in the code): a hand-picked list of *real, individually verified* Sketchfab and YouTube embed IDs. There is no generic "pull any palace" API — that was evaluated and doesn't exist. Every entry was checked by hand; nothing is guessed.
 
@@ -80,8 +80,10 @@ The castle also has a **real-browser test**, `tests/browser/castle.browser.js` (
 
 ## Next steps
 
-- **Swap in CC0 assets** for the hand-built props and textures (Poly Haven models/textures/HDRIs, ambientCG textures, Freesound CC0 ambience). The engine is structured for it: textures come from `texSet()` and props from `PROPS`. This needs the session's network policy to allow those domains.
-- **Hosting**: deploy `dist/` (GitHub Pages / Netlify) so it can be tried on phones.
+- **Done:** CC0 assets swapped in. That's 13 texture sets and 38 models, streamed in with the nearest room first; see `public/assets/CREDITS.md`.
+- **Still procedural** (no good CC0 match found): fountain, tree, sundial, hourglass, staircase, suit of armour, the two portraits, harp, long tables, fireplace, lectern, tapestry, chained bookcase, globe, potion shelf, cauldron, scales, cage, spear rack, telescope, star chart, orrery, crystal ball and armillary sphere. Also the keeper character, and the sound (Freesound previews sit on a CDN host that isn't on the allowed list).
+- **Library lighting** is still dim with the dark panelling; it needs another light or a lighter wood.
+- **Hosting:** deploy `dist/` (GitHub Pages or Netlify) so it can be tried on phones.
 
 ## Two ideas raised earlier
 

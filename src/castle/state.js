@@ -7,6 +7,8 @@ export const S = {
   animated: [],       // (t, dt) => void, run every frame
   lightSources: [],   // candidate positions for the pooled point lights
   stationViews: [],   // per station: ring, badge, card, orb
+  propGroups: {},     // station id -> its prop group (real models get attached here)
+  replaceables: {},   // kind -> [{group, bottom}] procedural pieces a real model can stand in for
   player: { x: 0, z: 0, yaw: 0, speed: 0, walkPhase: 0 },
   cam: { yaw: 0, pitch: 0.3, dist: 5.2, curDist: 5.2 },
   keys: {},

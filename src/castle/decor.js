@@ -29,7 +29,11 @@ function chandelier(radius, candles, dropTo, ceiling) {
   }
   for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2; const ch = cyl(0.015, 0.015, ceiling - dropTo, M.iron(), Math.cos(a) * radius * 0.5, (ceiling - dropTo) / 2, Math.sin(a) * radius * 0.5, 4); g.add(ch); }
   g.add(lightMarker(0, -0.2, 0, 0xffb066, 40 + radius * 15, 14 + radius * 2, 'chandelier'));
+  g.children.forEach(c => { if (c.isMesh && c.geometry.type === 'CylinderGeometry' && c.position.y > 0.5) c.userData.keep = true; });
   g.position.y = dropTo;
+  g.userData.noMerge = true;
+  const kind = radius >= 1.3 ? 'chandelier-big' : 'chandelier-small';
+  (S.replaceables[kind] = S.replaceables[kind] || []).push({ group: g, bottom: dropTo - 0.35 });
   return g;
 }
 // wall sconce with a burning torch
@@ -70,7 +74,7 @@ function bench(len) {
 function column(h, rad) {
   const g = new THREE.Group();
   g.add(box(rad * 2.6, 0.3, rad * 2.6, M.stone(), 0, 0.15, 0));
-  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.08, h - 0.7, 20), mat(0xd8d2c4, { roughness: 0.35 })); shaft.position.y = (h - 0.7) / 2 + 0.3; g.add(shaft);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad * 1.08, h - 0.7, 20), mat(0xe8e0d0, { roughness: 0.75, tex: 'plaster' })); shaft.position.y = (h - 0.7) / 2 + 0.3; g.add(shaft);
   g.add(box(rad * 2.6, 0.4, rad * 2.6, M.stone(), 0, h - 0.2, 0));
   return g;
 }
@@ -117,7 +121,7 @@ export function buildDecor() {
     const sc = 0.6 + r() * 0.9; m4.compose(new THREE.Vector3(x, 0.2 + up, z), q, new THREE.Vector3(sc, sc, sc)); ivy.setMatrixAt(i, m4);
   }
   ivy.receiveShadow = true; S.scene.add(ivy);
-  for (const [x, z] of [[42.6, 45.4], [42.6, 46.6], [41.5, 45.4]]) { add(box(1, 1, 1, M.wood(), x, 0.5, z)); S.colliders.push({ x, z, r: 0.6 }); }
+  for (const [x, z] of [[42.6, 45.4], [42.6, 46.6], [41.5, 45.4]]) { const c = add(box(1, 1, 1, M.wood(), x, 0.5, z)); c.userData.noMerge = true; (S.replaceables.crate = S.replaceables.crate || []).push({ group: c, bottom: 0 }); S.colliders.push({ x, z, r: 0.6 }); }
 
   /* Entrance Hall: columns, runner, great chandelier, crest banners, sconces */
   for (const x of [28, 40]) for (const z of [33, 39]) { add(column(R('entrance').h - 0.2, 0.42), x, 0, z); S.colliders.push({ x, z, r: 0.6 }); }
@@ -171,7 +175,7 @@ export function buildDecor() {
   const ladder = new THREE.Group(); for (const sx of [-0.25, 0.25]) ladder.add(box(0.06, 5.2, 0.06, M.wood(), sx, 2.6, 0)); for (let k = 0; k < 12; k++) ladder.add(box(0.5, 0.04, 0.04, M.wood(), 0, 0.3 + k * 0.42, 0));
   ladder.rotation.x = -0.18; add(ladder, 33, 0, 4.3); S.colliders.push({ x: 33, z: 4.1, r: 0.35 });
   hang('library', add(chandelier(1.4, 12, 7.6, 10), 34, 0, 14));
-  [[30, 18.6], [38.5, 12]].forEach(([x, z], i) => { const t = new THREE.Group(); t.add(box(1.4, 0.08, 0.8, M.wood(), 0, 0.82, 0)); for (const sx of [-0.6, 0.6]) for (const sz of [-0.3, 0.3]) t.add(box(0.07, 0.8, 0.07, M.darkwood(), sx, 0.4, sz)); if (i) { add(t, x, 0, z); S.colliders.push({ x, z, r: 0.8 }); } const l = bankerLamp(); hang('library', add(l, x + (i ? 0.4 : -0.6), i ? 0.86 : 0.9, z + (i ? 0 : -0.3))); });
+  [[30, 18.6], [38.5, 12]].forEach(([x, z], i) => { const t = new THREE.Group(); t.add(box(1.4, 0.08, 0.8, M.wood(), 0, 0.82, 0)); for (const sx of [-0.6, 0.6]) for (const sz of [-0.3, 0.3]) t.add(box(0.07, 0.8, 0.07, M.darkwood(), sx, 0.4, sz)); if (i) { add(t, x, 0, z); S.colliders.push({ x, z, r: 0.8 }); const l = bankerLamp(); hang('library', add(l, x + 0.4, 0.86, z)); } });
 
   /* Alchemist's Cellar: hanging herbs, candles, shelves, chains, green haze */
   [[52, 12], [60, 6], [58, 15]].forEach(([x, z]) => { for (let i = 0; i < 8; i++) { const l = new THREE.Mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 12), M.iron()); l.position.set(x, 4.2 - i * 0.17, z); l.rotation.y = (i % 2) ? Math.PI / 2 : 0; S.scene.add(l); } });

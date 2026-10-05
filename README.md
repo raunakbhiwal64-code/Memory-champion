@@ -40,7 +40,13 @@ How it works:
 - **Controls:** WASD or arrows to walk, Shift to run, drag to look, scroll to zoom, **M** for the map. While studying, click a station on the big map to jump to it. On phones there's an on-screen joystick and a Use button.
 - **Graphics** has three levels: High (soft shadows, ambient occlusion, bloom), Medium and Low. It drops a level automatically on slow devices. **Sound** turns the ambient soundscape on or off. The soundscape is synthesised in the browser, so there are no audio files.
 
-Everything is generated in code: surface textures (colour, detail and roughness maps for stone, wood, marble and cobbles), architecture, props, lighting and sound. Only Three.js (MIT) is used, with no downloaded models or textures. That keeps the asset licensing clean for a commercial product. The structure is ready for CC0 models and textures (Poly Haven, ambientCG) to replace the hand-built props room by room.
+**Real assets, streamed in.** The castle opens instantly with procedurally generated stand-ins (textures, props, lighting and sound are all generated in code). It then streams in real photo-scanned materials and 3D models from [Poly Haven](https://polyhaven.com), loading the room you're in first:
+- 13 texture sets: castle stone, mossy dungeon stone, red brick, plaster, wood panelling, cobbles, a stone checkerboard, plank and parquet floors, flagstones and slate
+- 38 models, including an iron gate, a grandfather clock, a gothic throne, an ornate mirror, a marble bust, bookshelves, an armchair, barrels, an alchemy set, a treasure chest, a cannon, a kite shield and swords, chandeliers, cabinets and statues
+
+Everything is **CC0** (public domain: commercial use, no attribution required); see `public/assets/CREDITS.md`. If the assets can't load, for example offline, the procedural versions stay.
+
+The assets are pre-optimised and committed (about 22 MB): WebP textures, meshopt-compressed GLB models, and models simplified to a triangle budget. To re-fetch them or add more, edit the lists in `scripts/fetch-assets.mjs` and run `npm run assets`. Their placement in the castle is in `src/castle/assets.js`.
 
 ## Other features
 
@@ -66,6 +72,9 @@ src/castle/           the 3D engine (ES modules, bundled by Vite)
   ui.js               HUD, map, memory panel, recall walk
   atmosphere.js       rain/dust/embers/mist particles and synthesised sound
   merge.js            merges static geometry to keep draw calls low
+  assets.js           streams real CC0 textures/models in and places them
+public/assets/        optimised CC0 textures + models, manifest.json, CREDITS.md
+scripts/fetch-assets.mjs  downloads + optimises the assets from Poly Haven
 tests/                jsdom smoke tests (app logic, castle data layer)
 tests/browser/        Playwright test driving the real WebGL castle
 ```
@@ -76,7 +85,7 @@ The castle layout itself (`CASTLE_ROOMS`, `CASTLE_STATIONS`, the grid helpers) l
 
 ```bash
 npm test               # 13 jsdom smoke-test files, 271 checks, no browser needed
-npm run test:browser   # builds, then drives the real 3D castle in headless Chromium (39 checks)
+npm run test:browser   # builds, then drives the real 3D castle in headless Chromium (43 checks)
 ```
 
 The browser test needs a Chromium for Playwright (`npx playwright install chromium`, or set `CHROMIUM_PATH`). It checks:
@@ -86,6 +95,7 @@ The browser test needs a Chromium for Playwright (`npx playwright install chromi
 - a flood fill proving all 40 stations are reachable on foot
 - saving memories, the map, and a full recall walk logged to history and spaced repetition
 - Library → castle placement, phone size, and the Graphics and Sound controls
+- every real texture and model streams in, with nothing failing to load
 
 Screenshots of each room land in `tests/browser/screenshots/`.
 

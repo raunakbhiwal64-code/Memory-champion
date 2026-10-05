@@ -1,3 +1,4 @@
 node_modules/
 dist/
+.asset-cache/
 tests/browser/screenshots/

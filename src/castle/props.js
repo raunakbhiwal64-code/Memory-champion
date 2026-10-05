@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { S, FACE_YAW } from './state.js';
 import { mat, M } from './materials.js';
 import { canvasTexture, glowTexture, rng } from './textures.js';
+import { REPLACED_PROPS } from './assets.js';
 
 /* One distinct object per station, built from primitives with physically
    based materials. Local frame: stands on y=0, front faces +z.
@@ -531,6 +532,8 @@ export function placeProp(s, room){
   g.position.set(s.x, 0, s.z);
   g.rotation.y = FACE_YAW[s.face];
   S.scene.add(g);
+  S.propGroups[s.id] = g;
+  if (REPLACED_PROPS.has(s.prop)) g.userData.noMerge = true;
   g.updateMatrixWorld(true);
   g.traverse(o=>{
     if(o.isMesh && !(o.material && o.material.blending === THREE.AdditiveBlending)){ o.castShadow = true; o.receiveShadow = true; }

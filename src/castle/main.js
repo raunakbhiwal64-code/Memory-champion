@@ -7,6 +7,7 @@ import { buildHero, animateHero } from './hero.js';
 import { movePlayer, updateCamera, wireInput, blocked, placeAt } from './player.js';
 import * as UI from './ui.js';
 import { mergeStatic } from './merge.js';
+import { streamAssets, assetStatus } from './assets.js';
 import { buildAtmosphere, startAudio, updateAudio, footstep, setMuted, isMuted, suspendAudio } from './atmosphere.js';
 
 /* The Keep of Mnemosyne: 3D engine entry point. Registers window.castleEngine,
@@ -17,7 +18,7 @@ const FOG = {
   courtyard: [0x0d1222, 0.012], entrance: [0x120e0a, 0.012], hall: [0x140d08, 0.010], gallery: [0x120e0a, 0.014],
   library: [0x120d08, 0.012], dungeon: [0x06140b, 0.034], armoury: [0x160a05, 0.016], tower: [0x0a0f22, 0.008]
 };
-let built = false, raf = 0, fps = 0, autoQuality = true, slowTime = 0, fogColor = new THREE.Color(0x0d1222);
+let streaming = false, built = false, raf = 0, fps = 0, autoQuality = true, slowTime = 0, fogColor = new THREE.Color(0x0d1222);
 
 function store(key, val) { try { if (val == null) return localStorage.getItem(key); localStorage.setItem(key, val); } catch (e) { return null; } return null; }
 
@@ -132,6 +133,7 @@ function enter(id, startMode) {
     S.running = true; S.clock.update(); cancelAnimationFrame(raf); frame();
     S.renderer.domElement.focus();
     updateChromeLabels();
+    if (!streaming) { streaming = true; streamAssets(); }
   };
   if (built) go();
   else { showLoading(true); requestAnimationFrame(() => setTimeout(go, 30)); }
@@ -176,7 +178,7 @@ window.castleEngine = {
       running: S.running, built, quality: S.quality, room: (castleRoomAt(S.player.x, S.player.z) || {}).id || null, fps: Math.round(fps),
       recall: S.recall ? { pos: S.recall.pos, total: S.recall.order.length, marks: S.recall.marks.slice() } : null,
       drawCalls: S.renderer ? S.renderer.info.render.calls : 0, triangles: S.renderer ? S.renderer.info.render.triangles : 0,
-      lights: S.lightSources.length, merged: S.mergeInfo
+      lights: S.lightSources.length, merged: S.mergeInfo, assets: Object.assign({}, assetStatus())
     }),
     teleportTo: UI.teleportTo, interact: UI.interact, keys: S.keys, blocked, cam: S.cam,
     placeAt: (x, z, yaw) => { placeAt(x, z, yaw); UI.updateNearby(); },

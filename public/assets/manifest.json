@@ -1,0 +1,257 @@
+{
+  "source": "Poly Haven (polyhaven.com), CC0 1.0",
+  "textures": {
+    "ashlar": {
+      "id": "castle_wall_varriation",
+      "scale": 2,
+      "name": "Castle Wall Variation"
+    },
+    "brick": {
+      "id": "castle_brick_02_red",
+      "scale": 1.5,
+      "name": "Castle Brick 02 Red"
+    },
+    "rubble": {
+      "id": "mossy_stone_wall",
+      "scale": 1.9999996423721313,
+      "name": "Mossy Stone Wall"
+    },
+    "plaster": {
+      "id": "medieval_wall_01",
+      "scale": 2,
+      "name": "Medieval Wall 01"
+    },
+    "panel": {
+      "id": "wooden_panels",
+      "scale": 2.0999999046325684,
+      "name": "Wooden Panels"
+    },
+    "cobble": {
+      "id": "cobblestone_floor_04",
+      "scale": 1.5,
+      "name": "Cobblestone Floor 04"
+    },
+    "marble": {
+      "id": "checkered_pavement_tiles",
+      "scale": 2,
+      "name": "Checkered Pavement Tiles"
+    },
+    "oak": {
+      "id": "wood_floor_worn",
+      "scale": 1.9999996423721313,
+      "name": "Wood Floor Worn"
+    },
+    "parquet": {
+      "id": "herringbone_parquet",
+      "scale": 3.4000000953674316,
+      "name": "Herringbone Parquet"
+    },
+    "beam": {
+      "id": "dark_wood",
+      "scale": 2,
+      "name": "Dark Wood"
+    },
+    "wetstone": {
+      "id": "monastery_stone_floor",
+      "scale": 1.7999999523162842,
+      "name": "Monastery Stone Floor"
+    },
+    "flag": {
+      "id": "rock_tile_floor_02",
+      "scale": 2.4000000953674316,
+      "name": "Rock Tile Floor 02"
+    },
+    "slate": {
+      "id": "roof_slates_02",
+      "scale": 3,
+      "name": "Roof Slates 02"
+    }
+  },
+  "models": {
+    "large_iron_gate": {
+      "file": "models/large_iron_gate.glb",
+      "name": "Large Iron Gate",
+      "bytes": 512520
+    },
+    "vintage_grandfather_clock_01": {
+      "file": "models/vintage_grandfather_clock_01.glb",
+      "name": "Vintage Grandfather Clock 01",
+      "bytes": 398112
+    },
+    "ornate_mirror_01": {
+      "file": "models/ornate_mirror_01.glb",
+      "name": "Ornate Mirror 01",
+      "bytes": 212896
+    },
+    "antique_ceramic_vase_01": {
+      "file": "models/antique_ceramic_vase_01.glb",
+      "name": "Antique Ceramic Vase 01",
+      "bytes": 185724
+    },
+    "marble_bust_01": {
+      "file": "models/marble_bust_01.glb",
+      "name": "Marble Bust 01",
+      "bytes": 355880
+    },
+    "wooden_bookshelf_worn": {
+      "file": "models/wooden_bookshelf_worn.glb",
+      "name": "Wooden Bookshelf Worn",
+      "bytes": 620604
+    },
+    "ArmChair_01": {
+      "file": "models/ArmChair_01.glb",
+      "name": "Arm Chair 01",
+      "bytes": 480552
+    },
+    "vintage_oil_lamp": {
+      "file": "models/vintage_oil_lamp.glb",
+      "name": "Vintage Oil Lamp",
+      "bytes": 158748
+    },
+    "book_encyclopedia_set_01": {
+      "file": "models/book_encyclopedia_set_01.glb",
+      "name": "Book Encyclopedia Set 01",
+      "bytes": 478692
+    },
+    "WoodenChair_01": {
+      "file": "models/WoodenChair_01.glb",
+      "name": "Wooden Chair 01",
+      "bytes": 262256
+    },
+    "wooden_barrels_01": {
+      "file": "models/wooden_barrels_01.glb",
+      "name": "Wooden Barrels 01",
+      "bytes": 1109888
+    },
+    "chemistry_set": {
+      "file": "models/chemistry_set.glb",
+      "name": "Chemistry Set",
+      "bytes": 506212
+    },
+    "wine_bottles_01": {
+      "file": "models/wine_bottles_01.glb",
+      "name": "Wine Bottles 01",
+      "bytes": 232012
+    },
+    "treasure_chest": {
+      "file": "models/treasure_chest.glb",
+      "name": "Treasure Chest",
+      "bytes": 740192
+    },
+    "cannon_01": {
+      "file": "models/cannon_01.glb",
+      "name": "Cannon 01",
+      "bytes": 593556
+    },
+    "kite_shield": {
+      "file": "models/kite_shield.glb",
+      "name": "Kite Shield",
+      "bytes": 822048
+    },
+    "antique_estoc": {
+      "file": "models/antique_estoc.glb",
+      "name": "Antique Estoc",
+      "bytes": 199216
+    },
+    "ornate_medieval_mace": {
+      "file": "models/ornate_medieval_mace.glb",
+      "name": "Ornate Medieval Mace",
+      "bytes": 224920
+    },
+    "ornate_war_hammer": {
+      "file": "models/ornate_war_hammer.glb",
+      "name": "Ornate War Hammer",
+      "bytes": 155964
+    },
+    "wooden_axe": {
+      "file": "models/wooden_axe.glb",
+      "name": "Wooden Axe",
+      "bytes": 133752
+    },
+    "vintage_cabinet_01": {
+      "file": "models/vintage_cabinet_01.glb",
+      "name": "Vintage Cabinet 01",
+      "bytes": 546272
+    },
+    "brass_goblets": {
+      "file": "models/brass_goblets.glb",
+      "name": "Brass Goblets",
+      "bytes": 264400
+    },
+    "Chandelier_03": {
+      "file": "models/Chandelier_03.glb",
+      "name": "Chandelier 03",
+      "bytes": 420944
+    },
+    "lantern_chandelier_01": {
+      "file": "models/lantern_chandelier_01.glb",
+      "name": "Lantern Chandelier 01",
+      "bytes": 881412
+    },
+    "wooden_crate_01": {
+      "file": "models/wooden_crate_01.glb",
+      "name": "Wooden Crate 01",
+      "bytes": 372188
+    },
+    "wooden_crate_02": {
+      "file": "models/wooden_crate_02.glb",
+      "name": "Wooden Crate 02",
+      "bytes": 364820
+    },
+    "wine_barrel_01": {
+      "file": "models/wine_barrel_01.glb",
+      "name": "Wine Barrel 01",
+      "bytes": 363252
+    },
+    "wooden_bucket_01": {
+      "file": "models/wooden_bucket_01.glb",
+      "name": "Wooden Bucket 01",
+      "bytes": 162088
+    },
+    "wooden_lantern_01": {
+      "file": "models/wooden_lantern_01.glb",
+      "name": "Wooden Lantern 01",
+      "bytes": 220316
+    },
+    "GothicCabinet_01": {
+      "file": "models/GothicCabinet_01.glb",
+      "name": "Gothic Cabinet 01",
+      "bytes": 356692
+    },
+    "GothicCommode_01": {
+      "file": "models/GothicCommode_01.glb",
+      "name": "Gothic Commode 01",
+      "bytes": 254312
+    },
+    "gothic_statue": {
+      "file": "models/gothic_statue.glb",
+      "name": "Gothic Statue",
+      "bytes": 962040
+    },
+    "horse_statue_01": {
+      "file": "models/horse_statue_01.glb",
+      "name": "Horse Statue 01",
+      "bytes": 295584
+    },
+    "lion_head": {
+      "file": "models/lion_head.glb",
+      "name": "Lion Head",
+      "bytes": 423724
+    },
+    "jug_01": {
+      "file": "models/jug_01.glb",
+      "name": "Jug 01",
+      "bytes": 83840
+    },
+    "spinning_wheel_01": {
+      "file": "models/spinning_wheel_01.glb",
+      "name": "Spinning Wheel 01",
+      "bytes": 556608
+    },
+    "painted_wooden_shelves": {
+      "file": "models/painted_wooden_shelves.glb",
+      "name": "Painted Wooden Shelves",
+      "bytes": 330776
+    }
+  }
+}

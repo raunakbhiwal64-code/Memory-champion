@@ -56,8 +56,10 @@ const fs = require('fs');
   check('castle has real light sources (torches, fires, chandeliers)', st.lights >= 25);
   check('a castle palace with 40 stations was created', await page.evaluate(() => DB.palaces.filter(isCastle).length === 1 && DB.palaces.find(isCastle).loci.length === 40));
   check('player starts in the courtyard', st.room === 'courtyard');
+  // the castle is playable at once; real CC0 assets stream in behind it
+  await page.waitForFunction(() => castleEngine.debug.state().assets.done, null, { timeout: 300000 });
   check('player starts facing the gate, a few steps from station 1', st.nearby === -1 && Math.abs(st.yaw) < 0.01);
-  await page.screenshot({ path: `${shotDir}/01-courtyard.png` });
+  await page.screenshot({ path: `${shotDir}/01-courtyard.png`, timeout: 240000 });
 
   // ---- every station circle is reachable on foot from the start ----
   const reach = await page.evaluate(() => {
@@ -86,11 +88,11 @@ const fs = require('fs');
   check('the gate itself blocks the way (no walking through props)', st.z < 58.6);
   // face north from the middle of the courtyard and run for the doorway
   await page.evaluate(() => castleEngine.debug.placeAt(34, 50, Math.PI));
-  await holdUntil(['KeyW', 'ShiftLeft'], () => castleEngine.debug.state().room === 'entrance' && castleEngine.debug.state().z < 40, 20000);
+  await holdUntil(['KeyW', 'ShiftLeft'], () => castleEngine.debug.state().room === 'entrance' && castleEngine.debug.state().z < 40, 120000);
   st = await state();
   check('player walks through the doorway into the Entrance Hall', st.room === 'entrance');
-  await page.screenshot({ path: `${shotDir}/01b-entrance.png` });
-  await page.keyboard.down('KeyD'); await wait(4000); await page.keyboard.up('KeyD');
+  await page.screenshot({ path: `${shotDir}/01b-entrance.png`, timeout: 240000 });
+  await page.keyboard.down('KeyD'); await wait(8000); await page.keyboard.up('KeyD');
   st = await state();
   check('walls stop the player (still inside the Entrance Hall)', st.room === 'entrance' && st.x < 44);
 
@@ -109,7 +111,7 @@ const fs = require('fs');
   await wait(150);
   check('memory saved to station 5', await page.evaluate(() => DB.palaces.find(isCastle).loci[4].content.text.includes('purple elephant')));
   check('panel closes after saving', !(await page.isVisible('#castle-panel.open')));
-  await page.screenshot({ path: `${shotDir}/02-memory-card.png` });
+  await page.screenshot({ path: `${shotDir}/02-memory-card.png`, timeout: 240000 });
 
   await page.evaluate(() => castleEngine.debug.teleportTo(11));
   await page.keyboard.press('KeyE');
@@ -121,12 +123,12 @@ const fs = require('fs');
   await page.click('#cp-save');
   check('three memories stored', await page.evaluate(() => DB.palaces.find(isCastle).loci.filter(isLocusFilled).length === 3));
   check('memories persisted to localStorage', await page.evaluate(() => (localStorage.getItem('mnemosyne:palaces') || '').includes('1066')));
-  await page.screenshot({ path: `${shotDir}/03-dungeon.png` });
+  await page.screenshot({ path: `${shotDir}/03-dungeon.png`, timeout: 240000 });
 
   // ---- map ----
   await page.keyboard.press('KeyM');
   check('M enlarges the map', await page.evaluate(() => document.getElementById('castle-map').classList.contains('big')));
-  await page.screenshot({ path: `${shotDir}/04-map.png` });
+  await page.screenshot({ path: `${shotDir}/04-map.png`, timeout: 240000 });
   await page.keyboard.press('Escape');
   check('Escape shrinks the map again', !(await page.evaluate(() => document.getElementById('castle-map').classList.contains('big'))));
 
@@ -152,7 +154,7 @@ const fs = require('fs');
   check('summary shows 1 of 3', (await page.textContent('#castle-panel')).includes('1 of 3'));
   check('recall walk logged to history', await page.evaluate(() => DB.history[0] && DB.history[0].type === 'palace-walk' && DB.history[0].correct === 1 && DB.history[0].total === 3));
   check('spaced-repetition schedule set on the castle palace', await page.evaluate(() => !!DB.palaces.find(isCastle).srs));
-  await page.screenshot({ path: `${shotDir}/05-recall-summary.png` });
+  await page.screenshot({ path: `${shotDir}/05-recall-summary.png`, timeout: 240000 });
 
   // ---- exit back to the app ----
   await page.click('#cf-exit');
@@ -177,7 +179,15 @@ const fs = require('fs');
   await page.evaluate(() => enterCastle(DB.palaces.find(isCastle).id, 'study'));
   await wait(500);
   check('castle still renders at phone size', (await state()).drawCalls > 50);
-  await page.screenshot({ path: `${shotDir}/06-phone.png` });
+  await page.screenshot({ path: `${shotDir}/06-phone.png`, timeout: 120000 });
+
+  // ---- real CC0 assets stream in and replace the procedural stand-ins ----
+  await page.waitForFunction(() => castleEngine.debug.state().assets.done, null, { timeout: 300000 });
+  const as = (await state()).assets;
+  check('all 13 real texture sets loaded', as.textures === 13);
+  check('real 3D models placed (40+)', as.models >= 40);
+  check('no asset failed to load', as.failed === 0);
+  check('draw calls stay reasonable with models loaded (< 900 at low quality)', (await state()).drawCalls < 900);
 
   // ---- graphics + sound controls ----
   await page.setViewportSize({ width: 1280, height: 800 });
@@ -191,7 +201,7 @@ const fs = require('fs');
   for (const [name, idx] of [['10-courtyard', 1], ['11-great-hall', 12], ['12-library', 21], ['13-cellar', 26], ['14-observatory', 37]]) {
     await page.evaluate(i => castleEngine.debug.teleportTo(i), idx);
     await wait(Number(process.env.SHOT_WAIT || 6000));
-    await page.screenshot({ path: `${shotDir}/${name}.png` });
+    await page.screenshot({ path: `${shotDir}/${name}.png`, timeout: 240000 });
   }
 
   check('no JavaScript errors', errors.length === 0);

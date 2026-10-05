@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { texSet } from './textures.js';
 
+// Every material that uses a texture set, so real textures can be swapped in later.
+const byTex = {};
+function track(name, m) { (byTex[name] = byTex[name] || []).push(m); return m; }
+export function materialsUsingTexture(name) { return byTex[name] || []; }
+
 // Surfaces that use world-space UVs (walls, floors, ceilings): one material per texture set.
 const surf = {};
 export function surfaceMat(name, extra) {
@@ -12,6 +17,7 @@ export function surfaceMat(name, extra) {
       normalScale: new THREE.Vector2(1, 1)
     }, extra || {}));
     surf[key].userData.scale = t.scale;
+    track(name, surf[key]);
   }
   return surf[key];
 }
@@ -23,8 +29,10 @@ export function mat(color, o) {
   const key = color + JSON.stringify(o);
   if (!cache[key]) {
     const params = Object.assign({ color, roughness: 0.7, metalness: 0 }, o);
-    if (o.tex) { const t = texSet(o.tex); params.map = t.map; params.normalMap = t.normalMap; params.roughnessMap = t.roughnessMap; delete params.tex; }
+    const tex = o.tex;
+    if (tex) { const t = texSet(tex); params.map = t.map; params.normalMap = t.normalMap; params.roughnessMap = t.roughnessMap; delete params.tex; }
     cache[key] = new THREE.MeshStandardMaterial(params);
+    if (tex) track(tex, cache[key]);
   }
   return cache[key];
 }
