@@ -4,6 +4,8 @@ A memory-sport training app built around the method of loci (memory palaces). It
 
 See [`PROJECT_CONTEXT.md`](./PROJECT_CONTEXT.md) for the full handoff: data model, feature inventory, known issues, and reversed decisions.
 
+**Native app:** the whole app is also being rebuilt in Godot as a native app for desktop, phones and the web, with a more realistic castle. It lives in [`godot/`](./godot/README.md).
+
 ## Running it
 
 ```bash

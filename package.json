@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "test": "for f in tests/*.js; do echo \"=== $f ===\"; node \"$f\" || exit 1; done",
     "test:browser": "vite build && node tests/browser/castle.browser.js",
-    "assets": "node scripts/fetch-assets.mjs"
+    "assets": "node scripts/fetch-assets.mjs",
+    "godot-data": "node scripts/export-godot-data.mjs",
+    "godot-assets": "node scripts/godot-assets.mjs"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.5.1",

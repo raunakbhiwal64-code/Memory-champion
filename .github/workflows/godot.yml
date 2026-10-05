@@ -1,0 +1,98 @@
+name: Godot app
+
+# Tests the native app on every change to it, then builds it for Linux,
+# Windows, the web and Android. The builds are attached to each run as
+# downloadable artifacts.
+
+on:
+  push:
+    paths: ['godot/**', '.github/workflows/godot.yml']
+  pull_request:
+    paths: ['godot/**', '.github/workflows/godot.yml']
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Import assets
+        # the first import of a fresh checkout occasionally crashes after finishing; a second pass completes it
+        run: godot --headless --import --path godot || godot --headless --import --path godot
+      - name: Run tests
+        run: godot --headless --path godot --scene res://tests/test_runner.tscn
+
+  export:
+    needs: test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: Linux
+            dir: linux
+          - preset: Windows
+            dir: windows
+          - preset: Web
+            dir: web
+          - preset: Android
+            dir: android
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Godot
+        run: |
+          curl -fsSL -o godot.zip "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q godot.zip
+          sudo mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+      - name: Cache export templates
+        id: templates
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}
+      - name: Install export templates
+        if: steps.templates.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL -o templates.tpz "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates
+          unzip -q templates.tpz -d ~/.local/share/godot/export_templates
+          mv ~/.local/share/godot/export_templates/templates "$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+      - name: Android SDK and debug keystore
+        if: matrix.preset == 'Android'
+        run: |
+          keytool -genkeypair -v -keystore "$HOME/debug.keystore" -storepass android -alias androiddebugkey \
+            -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.7.tres <<EOF
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "$ANDROID_SDK_ROOT"
+          export/android/java_sdk_path = "$JAVA_HOME_17_X64"
+          EOF
+          sed -i 's/^ *//' ~/.config/godot/editor_settings-4.7.tres
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PATH=$HOME/debug.keystore" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_USER=androiddebugkey" >> "$GITHUB_ENV"
+          echo "GODOT_ANDROID_KEYSTORE_DEBUG_PASSWORD=android" >> "$GITHUB_ENV"
+      - name: Import assets
+        run: godot --headless --import --path godot || godot --headless --import --path godot
+      - name: Export ${{ matrix.preset }}
+        run: |
+          mkdir -p "godot/build/${{ matrix.dir }}"
+          if [ "${{ matrix.preset }}" = "Android" ]; then mode=--export-debug; else mode=--export-release; fi
+          godot --headless --path godot $mode "${{ matrix.preset }}"
+          ls -la "godot/build/${{ matrix.dir }}"
+          test -n "$(ls -A "godot/build/${{ matrix.dir }}")"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mnemosyne-${{ matrix.dir }}
+          path: godot/build/${{ matrix.dir }}
+          if-no-files-found: error
