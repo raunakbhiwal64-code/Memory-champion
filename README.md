@@ -96,7 +96,7 @@ The castle layout itself (`CASTLE_ROOMS`, `CASTLE_STATIONS`, the grid helpers) l
 
 ```bash
 npm test               # 12 jsdom smoke-test files, 231 checks, no browser needed
-npm run test:browser   # builds, then drives the real 3D castle in headless Chromium (43 checks)
+npm run test:browser   # builds, then drives the real 3D castle in headless Chromium (47 checks)
 ```
 
 The browser test needs a Chromium for Playwright (`npx playwright install chromium`, or set `CHROMIUM_PATH`). It checks:
