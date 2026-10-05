@@ -35,6 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # two at a time: with more, the last job has waited for a runner until GitHub gave up on it
+      max-parallel: 2
       matrix:
         include:
           - preset: Linux
