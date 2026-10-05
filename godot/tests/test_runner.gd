@@ -37,7 +37,9 @@ func _ready() -> void:
 		var suite = script.new()
 		print("=== ", f)
 		var before := failed
-		await suite.run(self)
+		# a runtime error aborts the suite early; suites return true only when they reach the end
+		var finished = await suite.run(self)
+		check("%s ran to the end" % f, finished == true)
 		if failed == before:
 			print("    ok")
 		if suite is Node:

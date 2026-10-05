@@ -1,7 +1,7 @@
 extends RefCounted
 ## The app shell: every screen opens without errors and shows real content.
 
-func run(t) -> void:
+func run(t):
 	var main = load("res://scenes/main.tscn").instantiate()
 	t.add_child(main)
 	await t.get_tree().process_frame
@@ -24,6 +24,7 @@ func run(t) -> void:
 	_find_button(main.modal_scroll, "Yes").pressed.emit()
 	t.check("confirming runs the action and closes the modal", t.get_meta("confirmed", false) and not main.modal_open())
 	t.set_meta("main", main)
+	return true
 
 
 static func _find_button(root: Node, text: String) -> Button:

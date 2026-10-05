@@ -26,7 +26,7 @@ func web_backup() -> Dictionary:
 	} }
 
 
-func run(t) -> void:
+func run(t):
 	var res := Backup.parse(JSON.stringify(web_backup()))
 	t.check("a web-app backup parses", res.ok)
 	var d: Dictionary = res.data
@@ -84,3 +84,4 @@ func run(t) -> void:
 	var out_path := DB.dir.path_join("export.json")
 	t.check("export to a file works", DB.export_to_file(out_path) and Backup.parse(FileAccess.get_file_as_string(out_path)).ok)
 	t.check("the last backup time is remembered", DB.data.settings.has("lastBackupAt"))
+	return true

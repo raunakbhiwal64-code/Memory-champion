@@ -1,7 +1,7 @@
 extends RefCounted
 ## Content, palaces, library chunking and drill scoring.
 
-func run(t) -> void:
+func run(t):
 	t.check("18 lessons in 6 levels", Content.all_lessons().size() == 18 and Content.curriculum.size() == 6)
 	t.check("lesson bodies are BBCode, not HTML", not Content.find_lesson("l1-2").body.contains("<p>") and Content.find_lesson("l1-2").body.contains("[b]"))
 	t.check("40 castle stations across 8 rooms", Content.castle.stations.size() == 40 and Content.castle.rooms.size() == 8)
@@ -67,3 +67,4 @@ func run(t) -> void:
 	var url := Util.data_url_from_image(img)
 	var back := Util.image_from_data_url(url)
 	t.check("photos are shrunk to 480px JPEG data URLs and decode again", url.begins_with("data:image/jpeg;base64,") and back != null and back.get_width() == 480)
+	return true

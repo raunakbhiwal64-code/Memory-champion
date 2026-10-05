@@ -6,7 +6,7 @@ var main
 
 
 func press(text: String, root: Node = null) -> bool:
-	var b := _find(root if root else main, text)
+	var b := _find(root if root else (main.modal_scroll if main.modal_open() else main), text)
 	if b == null:
 		t.check("button '%s' exists" % text, false)
 		return false
@@ -49,7 +49,7 @@ func frame() -> void:
 	await t.get_tree().process_frame
 
 
-func run(runner) -> void:
+func run(runner):
 	t = runner
 	t.reset_db()
 	main = App.main
@@ -153,3 +153,4 @@ func run(runner) -> void:
 	App.go("palace", { id = castle[0].id })
 	await frame()
 	t.check("castle station titles can't be renamed", not main.views.palace.content.find_children("*", "LineEdit", true, false)[0].editable)
+	return true

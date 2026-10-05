@@ -1,7 +1,7 @@
 extends RefCounted
 ## Per-memory scheduling.
 
-func run(t) -> void:
+func run(t):
 	var day := Fsrs.DAY_MS
 	var t0 := 1.7e12
 	var c := Fsrs.review(null, Fsrs.GOOD, t0)
@@ -45,3 +45,4 @@ func run(t) -> void:
 	var old := Fsrs.from_sm2({ ef = 2.5, interval = 6, reps = 2, dueAt = t0 + 2 * day, lastAt = t0 - 4 * day })
 	t.check("old SM-2 schedules seed a card with the same due date", old.due == t0 + 2 * day and old.s == 6.0)
 	t.check("no SM-2 schedule means a new card", Fsrs.from_sm2(null) == null)
+	return true

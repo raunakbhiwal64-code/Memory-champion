@@ -1,10 +1,11 @@
 extends RefCounted
 ## Every script in the project compiles.
 
-func run(t) -> void:
+func run(t):
 	for path in _scripts("res://scripts") + _scripts("res://tools"):
 		var s = load(path)
 		t.check("%s compiles" % path, s != null and s.can_instantiate())
+	return true
 
 
 func _scripts(dir: String) -> Array:
