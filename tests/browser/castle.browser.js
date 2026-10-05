@@ -52,13 +52,14 @@ const fs = require('fs');
   let st = await state();
   check('castle overlay open and render loop running', st.running && await page.isVisible('#castle-root'));
   check('scene actually draws (WebGL draw calls > 50)', st.drawCalls > 50);
-  check('static geometry merged into few draw calls (< 400 at low quality)', st.drawCalls < 400);
+  check('static geometry merged into few draw calls (< 400 at low quality, got ' + st.drawCalls + ')', st.drawCalls < 400);
+  check('rooms you cannot see into are culled', await page.evaluate(() => castleEngine.debug.culling().hidden > 50));
   check('castle has real light sources (torches, fires, chandeliers)', st.lights >= 25);
   check('a castle palace with 40 stations was created', await page.evaluate(() => DB.palaces.filter(isCastle).length === 1 && DB.palaces.find(isCastle).loci.length === 40));
   check('player starts in the courtyard', st.room === 'courtyard');
   // the castle is playable at once; real CC0 assets stream in behind it
   await page.waitForFunction(() => castleEngine.debug.state().assets.done, null, { timeout: 300000 });
-  check('player starts facing the gate, a few steps from station 1', st.nearby === -1 && Math.abs(st.yaw) < 0.01);
+  check('player starts facing the castle doors, a few steps inside the gate', st.nearby === -1 && Math.abs(st.yaw - Math.PI) < 0.01);
   await page.screenshot({ path: `${shotDir}/01-courtyard.png`, timeout: 240000 });
 
   // ---- every station circle is reachable on foot from the start ----
@@ -80,6 +81,9 @@ const fs = require('fs');
   check('all 40 station circles are reachable by walking' + (unreachable.length ? ' (unreachable: ' + unreachable.join(',') + ')' : ''), unreachable.length === 0);
 
   // ---- walking with the keyboard moves the player, walls stop them ----
+  check('first visit shows the "doors open as you reach them" hint once', await page.evaluate(() => localStorage.getItem('mnemosyne:castleHintSeen') === '1'));
+  check('every archway has a closed oak door at the start', await page.evaluate(() => castleEngine.debug.doors().length === CASTLE_DOORS.length && castleEngine.debug.doors().every(d => d.open === 0)));
+  await page.evaluate(() => castleEngine.debug.placeAt(CASTLE_START.x, CASTLE_START.z, 0));
   const before = await state();
   await holdUntil(['KeyW'], () => castleEngine.debug.state().nearby === 0, 15000);
   st = await state();
@@ -91,6 +95,7 @@ const fs = require('fs');
   await holdUntil(['KeyW', 'ShiftLeft'], () => castleEngine.debug.state().room === 'entrance' && castleEngine.debug.state().z < 40, 120000);
   st = await state();
   check('player walks through the doorway into the Entrance Hall', st.room === 'entrance');
+  check('the entrance doors swung open as the player reached them', await page.evaluate(() => castleEngine.debug.doors()[0].open > 0.9));
   await page.screenshot({ path: `${shotDir}/01b-entrance.png`, timeout: 240000 });
   await page.keyboard.down('KeyD'); await wait(8000); await page.keyboard.up('KeyD');
   st = await state();
@@ -126,6 +131,8 @@ const fs = require('fs');
   await page.screenshot({ path: `${shotDir}/03-dungeon.png`, timeout: 240000 });
 
   // ---- map ----
+  await page.waitForFunction(() => castleEngine.debug.doors()[0].open === 0, null, { timeout: 60000 }).catch(() => {});
+  check('the entrance doors close again once the player has moved on', await page.evaluate(() => castleEngine.debug.doors()[0].open === 0));
   await page.keyboard.press('KeyM');
   check('M enlarges the map', await page.evaluate(() => document.getElementById('castle-map').classList.contains('big')));
   await page.screenshot({ path: `${shotDir}/04-map.png`, timeout: 240000 });
@@ -184,7 +191,7 @@ const fs = require('fs');
   // ---- real CC0 assets stream in and replace the procedural stand-ins ----
   await page.waitForFunction(() => castleEngine.debug.state().assets.done, null, { timeout: 300000 });
   const as = (await state()).assets;
-  check('all 13 real texture sets loaded', as.textures === 13);
+  check('all 15 real texture sets loaded', as.textures === 15);
   check('real 3D models placed (40+)', as.models >= 40);
   check('no asset failed to load', as.failed === 0);
   check('draw calls stay reasonable with models loaded (< 900 at low quality)', (await state()).drawCalls < 900);
@@ -193,7 +200,8 @@ const fs = require('fs');
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.click('#castle-btn-quality');
   check('Graphics button cycles quality (low -> high)', (await state()).quality === 'high' && (await page.textContent('#castle-btn-quality')).includes('High'));
-  await page.click('#castle-btn-sound');
+  // High quality is very slow under software rendering, so don't wait for the page to look 'stable'
+  await page.click('#castle-btn-sound', { force: true, timeout: 240000 });
   check('Sound button toggles', (await page.textContent('#castle-btn-sound')).includes('off'));
   check('graphics choice is remembered', await page.evaluate(() => localStorage.getItem('mnemosyne:castleQuality')) === 'high');
 

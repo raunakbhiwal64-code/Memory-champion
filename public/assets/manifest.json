@@ -65,6 +65,16 @@
       "id": "roof_slates_02",
       "scale": 3,
       "name": "Roof Slates 02"
+    },
+    "bark": {
+      "id": "jolcham_oak_bark_01",
+      "scale": 1,
+      "name": "Jolcham Oak Bark 01"
+    },
+    "wool": {
+      "id": "rough_linen",
+      "scale": 0.2707081392676629,
+      "name": "Rough Linen"
     }
   },
   "models": {
@@ -252,6 +262,26 @@
       "file": "models/painted_wooden_shelves.glb",
       "name": "Painted Wooden Shelves",
       "bytes": 330776
+    },
+    "street_lamp_01": {
+      "file": "models/street_lamp_01.glb",
+      "name": "Street Lamp 01",
+      "bytes": 268568
+    },
+    "street_lamp_02": {
+      "file": "models/street_lamp_02.glb",
+      "name": "Street Lamp 02",
+      "bytes": 267576
+    },
+    "fern_02": {
+      "file": "models/fern_02.glb",
+      "name": "Fern 02",
+      "bytes": 218952
+    },
+    "shrub_02": {
+      "file": "models/shrub_02.glb",
+      "name": "Shrub 02",
+      "bytes": 398740
     }
   }
 }

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { S, INTERACT_R } from './state.js';
 import { PROP_META, placeProp } from './props.js';
 import { canvasTexture, glowTexture } from './textures.js';
+import { M } from './materials.js';
 import { placeAt } from './player.js';
 
 /* Station markers, floating memory cards, HUD, parchment map, the memory
@@ -55,44 +56,85 @@ export function setExitHandler(fn) { handlers.exit = fn; }
     return tex;
   }
   const orbTex = ()=>glowTexture('rgba(255,210,110,1)');
+  // One atlas of 40 engraved brass floor medallions (8 x 5 cells), so every
+  // medallion shares a material and merges into a single draw call.
+  const ATLAS_COLS = 8, ATLAS_ROWS = 5, CELL = 128;
+  let atlasMat = null;
+  function medallionMaterial(){
+    if(atlasMat) return atlasMat;
+    const tex = canvasTexture(ATLAS_ROWS*CELL, (g)=>{
+      for(let n=1; n<=40; n++){
+        const col = (n-1) % ATLAS_COLS, row = Math.floor((n-1) / ATLAS_COLS), cx = col*CELL + CELL/2, cy = row*CELL + CELL/2, R = CELL/2;
+        const gr = g.createRadialGradient(cx - R*0.3, cy - R*0.3, R*0.1, cx, cy, R);
+        gr.addColorStop(0, '#e0c58a'); gr.addColorStop(0.7, '#b8944f'); gr.addColorStop(1, '#7d6232');
+        g.fillStyle = gr; g.beginPath(); g.arc(cx, cy, R, 0, Math.PI*2); g.fill();
+        // engraved rings, compass ticks and the number, worn by footsteps
+        g.strokeStyle = 'rgba(60,40,15,.75)'; g.lineWidth = 2.5;
+        g.beginPath(); g.arc(cx, cy, R*0.9, 0, Math.PI*2); g.stroke();
+        g.lineWidth = 1.2; g.beginPath(); g.arc(cx, cy, R*0.62, 0, Math.PI*2); g.stroke();
+        for(let k=0; k<16; k++){ const a = k/16*Math.PI*2, r0 = R*(k%4 ? 0.8 : 0.72); g.beginPath(); g.moveTo(cx + Math.cos(a)*r0, cy + Math.sin(a)*r0); g.lineTo(cx + Math.cos(a)*R*0.88, cy + Math.sin(a)*R*0.88); g.stroke(); }
+        g.font = 'bold 44px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+        g.fillStyle = 'rgba(255,235,190,.45)'; g.fillText(String(n), cx + 1.5, cy + 3.5);
+        g.fillStyle = 'rgba(45,28,8,.9)'; g.fillText(String(n), cx, cy + 2);
+        const wear = g.createRadialGradient(cx, cy, 0, cx, cy, R*0.7);
+        wear.addColorStop(0, 'rgba(255,240,200,.18)'); wear.addColorStop(1, 'rgba(255,240,200,0)');
+        g.fillStyle = wear; g.beginPath(); g.arc(cx, cy, R*0.7, 0, Math.PI*2); g.fill();
+      }
+    }, ATLAS_COLS*CELL);
+    atlasMat = new THREE.MeshStandardMaterial({ map: tex, metalness: 0.9, roughness: 0.42, color: 0xffffff });
+    return atlasMat;
+  }
+  function medallion(s, rp){
+    const geo = new THREE.CircleGeometry(0.5, 40);
+    const uv = geo.attributes.uv, col = (s.n-1) % ATLAS_COLS, row = Math.floor((s.n-1) / ATLAS_COLS);
+    for(let i=0; i<uv.count; i++) uv.setXY(i, (col + uv.getX(i)) / ATLAS_COLS, 1 - (row + 1 - uv.getY(i)) / ATLAS_ROWS);
+    geo.rotateX(-Math.PI/2);
+    // the number reads upright as you step onto it, facing the station's object
+    geo.rotateY(Math.atan2(-(s.x - rp.x), -(s.z - rp.z)));
+    const top = new THREE.Mesh(geo, medallionMaterial());
+    top.position.set(rp.x, 0.018, rp.z); top.receiveShadow = true;
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.53, 0.018, 40, 1, true), M.brass());
+    rim.position.set(rp.x, 0.009, rp.z);
+    return [top, rim];
+  }
   function buildStations(){
     CASTLE_STATIONS.forEach((s, i)=>{
       placeProp(s, s.room);
       const meta = PROP_META[s.prop] || {};
       const rp = castleRingPos(s);
-      const ringMat = new THREE.MeshBasicMaterial({ color:0x6cabd6, transparent:true, opacity:0.6, depthWrite:false, side:THREE.DoubleSide });
-      const ring = new THREE.Mesh(new THREE.RingGeometry(0.72, 0.92, 40), ringMat);
-      ring.rotation.x = -Math.PI/2; ring.position.set(rp.x, 0.04, rp.z);
-      const disc = new THREE.Mesh(new THREE.CircleGeometry(0.72, 32), new THREE.MeshBasicMaterial({ color:0x6cabd6, transparent:true, opacity:0.12, depthWrite:false }));
-      disc.rotation.x = -Math.PI/2; disc.position.set(rp.x, 0.035, rp.z);
-      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(s.n), transparent:true, depthWrite:false, toneMapped:false, fog:false }));
-      badge.scale.set(0.55, 0.55, 1); badge.position.set(s.x, meta.h || 3, s.z);
-      const card = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthWrite:false, toneMapped:false, fog:false, color:0xe6e6e6 }));
-      card.scale.set(2.6, 1.3, 1); card.position.set(s.x, (meta.h || 3) + 1.0, s.z); card.visible = false;
-      const orb = new THREE.Sprite(new THREE.SpriteMaterial({ map: orbTex(), blending:THREE.AdditiveBlending, transparent:true, depthWrite:false }));
-      orb.scale.set(0.9, 0.9, 1); orb.position.set(s.x, (meta.h || 3) + 0.7, s.z); orb.visible = false;
-      S.scene.add(ring, disc, badge, card, orb);
-      S.stationViews[i] = { s, rp, ring, ringMat, disc, badge, card, orb, cardKey:null };
+      // a brass medallion set into the floor, with a thin inlay that glows only when it matters
+      S.scene.add(...medallion(s, rp));
+      const ringMat = new THREE.MeshBasicMaterial({ color:0xe8c27a, transparent:true, opacity:0, depthWrite:false, blending:THREE.AdditiveBlending });
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.57, 48), ringMat);
+      ring.rotation.x = -Math.PI/2; ring.position.set(rp.x, 0.022, rp.z);
+      ring.userData.noMerge = true;
+      const badge = new THREE.Sprite(new THREE.SpriteMaterial({ map: badgeTexture(s.n), transparent:true, depthWrite:false, toneMapped:false, opacity:0 }));
+      badge.scale.set(0.4, 0.4, 1); badge.position.set(s.x, meta.h || 3, s.z);
+      const card = new THREE.Sprite(new THREE.SpriteMaterial({ transparent:true, depthWrite:false, toneMapped:false, color:0xdcd6c8 }));
+      card.scale.set(2.2, 1.1, 1); card.position.set(s.x, (meta.h || 3) + 0.9, s.z); card.visible = false;
+      const orb = new THREE.Sprite(new THREE.SpriteMaterial({ map: orbTex(), blending:THREE.AdditiveBlending, transparent:true, depthWrite:false, opacity:0.7 }));
+      orb.scale.set(0.5, 0.5, 1); orb.position.set(s.x, (meta.h || 3) + 0.6, s.z); orb.visible = false;
+      S.scene.add(ring, badge, card, orb);
+      S.stationViews[i] = { s, rp, ring, ringMat, badge, card, orb, cardKey:null, base:0 };
     });
   }
   function recallTargetIdx(){ return S.recall && S.recall.pos < S.recall.order.length ? S.recall.order[S.recall.pos] : -1; }
   function refreshStation(i){
     const sv = S.stationViews[i], p = palace(); if(!sv || !p) return;
     const l = p.loci[i], filled = isLocusFilled(l);
-    let color = filled ? 0xcda13a : 0x6cabd6, opacity = filled ? 0.75 : 0.45, showCard = false, showOrb = false;
+    let color = filled ? 0xe0b25a : 0x9fc3e0, opacity = filled ? 0.3 : 0, showCard = false, showOrb = false;
     if(S.mode === 'recall'){
       const rpos = S.recall ? S.recall.order.indexOf(i) : -1;
       const done = rpos >= 0 && rpos < S.recall.pos;
-      if(i === recallTargetIdx()){ color = 0xfff1c0; opacity = 0.95; showOrb = true; }
-      else if(done){ color = S.recall.marks[rpos] ? 0x82b98d : 0xd3766a; opacity = 0.8; showCard = true; }
-      else if(filled){ color = 0xcda13a; opacity = 0.35; showOrb = true; }
-      else { opacity = 0.12; }
+      if(i === recallTargetIdx()){ color = 0xfff1c0; opacity = 0.8; showOrb = true; }
+      else if(done){ color = S.recall.marks[rpos] ? 0x82b98d : 0xd3766a; opacity = 0.55; showCard = true; }
+      else if(filled){ color = 0xe0b25a; opacity = 0.25; }
+      else { opacity = 0; }
       if(S.panelStation === i && S.recall && S.recall.revealed) { showCard = true; showOrb = false; }
     } else {
       showCard = filled;
     }
-    sv.ringMat.color.setHex(color); sv.ringMat.opacity = opacity;
-    sv.disc.material.color.setHex(color);
+    sv.ringMat.color.setHex(color); sv.base = opacity;
     sv.card.visible = showCard; sv.orb.visible = showOrb && !showCard;
     if(showCard){
       const key = ((l.content && l.content.text) || '') + '|' + (l.image ? l.image.length : 0);
@@ -103,12 +145,21 @@ export function setExitHandler(fn) { handlers.exit = fn; }
     }
   }
   function refreshAllStations(){ S.stationViews.forEach((_, i)=>refreshStation(i)); }
+  const fade = (d, near, far)=>Math.max(0, Math.min(1, (far - d) / (far - near)));
   function animateStations(t){
-    const target = recallTargetIdx();
+    const target = recallTargetIdx(), next = S.mode === 'recall' ? -1 : nextEmptyIdx();
     S.stationViews.forEach((sv, i)=>{
-      sv.orb.position.y = (PROP_META[sv.s.prop].h || 3) + 0.7 + Math.sin(t*2 + i)*0.08;
-      if(i === target || i === S.nearbyStation){ const k = 1 + Math.sin(t*5)*0.08; sv.ring.scale.set(k, k, k); }
-      else sv.ring.scale.set(1, 1, 1);
+      const d = Math.hypot(S.player.x - sv.s.x, S.player.z - sv.s.z);
+      sv.orb.position.y = (PROP_META[sv.s.prop].h || 3) + 0.6 + Math.sin(t*2 + i)*0.05;
+      // the inlay brightens as you arrive, and breathes on the station you're heading for
+      let o = sv.base;
+      if(i === S.nearbyStation) o = Math.max(o, 0.75 + Math.sin(t*4)*0.1);
+      else if(i === target || i === next) o = Math.max(o, (0.35 + Math.sin(t*2.5)*0.12) * fade(d, 6, 22));
+      sv.ringMat.opacity = o;
+      // numbers and memory cards appear as you approach rather than floating everywhere
+      sv.badge.material.opacity = fade(d, 3.5, 7.5) * 0.9;
+      sv.badge.visible = sv.badge.material.opacity > 0.01;
+      sv.card.material.opacity = fade(d, 9, 16);
     });
   }
 
@@ -289,7 +340,7 @@ export function setExitHandler(fn) { handlers.exit = fn; }
     closePanel();
     S.recall = { order, pos:0, marks:[], revealed:false };
     S.mode = 'recall';
-    teleportStart();
+    teleportStart(0); // face the iron gate, station 1
     refreshAllStations();
     return true;
   }
@@ -362,7 +413,7 @@ export function setExitHandler(fn) { handlers.exit = fn; }
     }
     openStudyPanel(S.nearbyStation);
   }
-  function teleportStart(){ placeAt(CASTLE_START.x, CASTLE_START.z, CASTLE_START.yaw); updateNearby(); }
+  function teleportStart(yaw){ placeAt(CASTLE_START.x, CASTLE_START.z, yaw === undefined ? CASTLE_START.yaw : yaw); updateNearby(); }
 
 
 export { buildStations, refreshStation, refreshAllStations, animateStations, updateNearby, hud, drawMap, toggleMap, onMapClick,

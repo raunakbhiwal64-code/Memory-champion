@@ -41,7 +41,7 @@ export function buildAtmosphere() {
   for (const id of ['entrance', 'library', 'gallery']) points(160, roomBox(id), { color: 'rgba(255,225,170,0.9)', size: 0.06, drift: 0.12, yMin: 0.5, opacity: 0.7, seed: id.length });
   points(120, { x0: 3, z0: 22, x1: 8, z1: 30, h: 8 }, { color: 'rgba(255,140,50,1)', size: 0.08, vy: 0.9, drift: 0.3, yMin: 0.5, yMax: 7, respawnY: 0.6, seed: 9 }); // fireplace embers
   points(90, { x0: 61.5, z0: 32.5, x1: 65.5, z1: 35.5, h: 6 }, { color: 'rgba(255,170,60,1)', size: 0.07, vy: 1.6, drift: 0.6, yMin: 1.2, yMax: 6, respawnY: 1.2, seed: 11 }); // forge sparks
-  points(40, roomBox('dungeon'), { color: 'rgba(110,255,150,0.35)', size: 2.6, drift: 0.25, yMin: 0.2, yMax: 1.6, opacity: 0.35, seed: 5 }); // low mist
+  points(40, roomBox('dungeon'), { color: 'rgba(190,205,195,0.3)', size: 3.2, drift: 0.2, yMin: 0.1, yMax: 1.2, opacity: 0.1, seed: 5 }); // low, faint mist
   S.animated.push((t, dt) => {
     for (const s of systems) {
       const { pos, vel, box, opts } = s;

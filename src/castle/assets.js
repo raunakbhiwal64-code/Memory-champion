@@ -70,6 +70,12 @@ const DECOR_MODELS = [
   ['courtyard', 'wine_barrel_01', 42.6, 47.6, 0, 0.4, { height: 1.1 }],
   ['courtyard', 'wooden_lantern_01', 41.7, 46.6, 0.92, 0, { height: 0.55 }],
   ['courtyard', 'wine_barrel_01', 25.2, 44.9, 0, 1.2, { height: 1.1 }],
+  // planting: a hedge along the east wall, ferns in the corners and by the walls
+  ['courtyard', 'shrub_02', 43.1, 52, 0, Math.PI / 2, { length: 4.6 }, [[43.1, 50, 0.7], [43.1, 52, 0.7], [43.1, 54, 0.7]]],
+  ['courtyard', 'fern_02', 24.9, 49.6, 0, 0.3, { length: 2.6 }],
+  ['courtyard', 'fern_02', 28.6, 58.6, 0, 2.1, { length: 2.4 }],
+  ['courtyard', 'fern_02', 38.2, 58.7, 0, -1.2, { length: 2.2 }],
+  ['courtyard', 'fern_02', 27.6, 44.95, 0, 1.0, { length: 2.0 }],
   ['entrance', 'gothic_statue', 41.6, 41.2, 0, -2.4, { height: 1.9 }],
   ['entrance', 'GothicCabinet_01', 31, 28.7, 0, 0, { height: 2.6 }],
   ['hall', 'GothicCabinet_01', 21.1, 25, 0, -Math.PI / 2, { height: 2.6 }],
@@ -103,6 +109,10 @@ async function instance(id, fit, opts) {
   const casts = Math.max(size.x, size.y, size.z) > 1.0;
   obj.traverse(o => { if (o.isMesh) { o.castShadow = casts; o.receiveShadow = true; } });
   if (opts && opts.rot) obj.rotation.set(...opts.rot);
+  // lamp glass glows warm, as if lit from inside
+  obj.traverse(o => { if (o.isMesh && /glass/i.test(o.material.name) && !o.material.userData.lit) {
+    o.material.color.set(0xffc888); o.material.emissive = new THREE.Color(0xffa24a); o.material.emissiveIntensity = 1.3; o.material.userData.lit = true; o.castShadow = false;
+  } });
   return obj;
 }
 async function warm(obj) {
@@ -129,11 +139,15 @@ async function placeStationModel(s, spec) {
   S.renderer.shadowMap.needsUpdate = true;
   status.models++;
 }
-async function placeDecorModel([, id, x, z, y, yaw, fit]) {
+async function placeDecorModel([, id, x, z, y, yaw, fit, colliders]) {
   const o = await instance(id, fit);
   await warm(o);
   o.position.set(x, y, z); o.rotation.y = yaw;
+  // centre models whose origin sits at one end (planting rows, clumps)
+  o.updateMatrixWorld(true);
+  if (fit && fit.length) { const c = new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3()); o.position.x += x - c.x; o.position.z += z - c.z; }
   S.scene.add(o);
+  for (const [cx, cz, r] of colliders || []) S.colliders.push({ x: cx, z: cz, r });
   status.models++;
 }
 async function swapReplaceables(kind, id, fit) {
@@ -144,7 +158,7 @@ async function swapReplaceables(kind, id, fit) {
     o.rotation.y = r.group.rotation.y;
     o.updateMatrixWorld(true);
     o.position.y = r.bottom - new THREE.Box3().setFromObject(o).min.y;
-    if (r.group.isMesh) r.group.visible = false;
+    if (r.group.isMesh) { r.group.visible = false; r.group.userData.noCull = true; }
     else r.group.children.forEach(c => { if (!c.userData.light && !c.userData.keep) c.visible = false; });
     S.scene.add(o);
     status.models++;
@@ -170,6 +184,8 @@ export async function streamAssets() {
   jobs.push({ room: 'hall', run: () => swapReplaceables('chandelier-big', 'Chandelier_03', { height: 2.3 }) });
   jobs.push({ room: 'library', run: () => swapReplaceables('chandelier-small', 'lantern_chandelier_01', { height: 1.6 }) });
   jobs.push({ room: 'courtyard', run: () => swapReplaceables('crate', 'wooden_crate_01', { width: 1.0 }) });
+  jobs.push({ room: 'courtyard', run: () => swapReplaceables('lamppost', 'street_lamp_01', { height: 3.9 }) });
+  jobs.push({ room: 'courtyard', run: () => swapReplaceables('walllamp', 'street_lamp_02', { height: 1.7 }) });
   status.queued = jobs.length;
   const next = () => { if (!jobs.length) return null; const order = roomOrder(); jobs.sort((a, b) => order.indexOf(a.room) - order.indexOf(b.room)); return jobs.shift(); };
   const worker = async () => { for (let j = next(); j; j = next()) { try { await j.run(); } catch (e) { status.failed++; } } };

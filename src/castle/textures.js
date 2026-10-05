@@ -193,6 +193,19 @@ function plaster(N, seed, o) {
   }
   return finish(N, height, color, rough, Object.assign({ normalStrength: 1.5 }, o));
 }
+// furrowed bark: vertical ridges, wandering with noise, broken by cracks
+function bark(N, seed, o) {
+  const noise = makeNoise(N, seed);
+  const height = new Float32Array(N * N), color = new Float32Array(N * N * 3), rough = new Float32Array(N * N);
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const i = y * N + x, u = x / N, w = y / N, warp = noise(u, w, 4, 2), n = noise(u + 0.3, w + 0.6, 5, 8);
+    const ridge = Math.pow(Math.abs(Math.sin((u * o.ridges + warp * 1.6) * Math.PI)), 0.55);
+    const h = ridge * 0.75 + n * 0.35;
+    const col = shade(o.color, 0.45 + h * 0.75 + Math.max(0, n - 0.62) * 0.6);
+    height[i] = h; color[i * 3] = col[0]; color[i * 3 + 1] = col[1]; color[i * 3 + 2] = col[2]; rough[i] = 0.95 - h * 0.1;
+  }
+  return finish(N, height, color, rough, Object.assign({ normalStrength: 5 }, o));
+}
 function panels(N, seed, o) {
   const wd = wood(N, seed, Object.assign({}, o, { boards: 8 }));
   // raised rectangles drawn over the planks via a second height pass
@@ -243,7 +256,9 @@ const RECIPES = {
   plaster:  () => plaster(256, 111, { color: [214, 196, 160], scale: 3 }),
   panel:    () => panels(512, 121, { color: [102, 66, 38], rough: 0.5, scale: 2.4 }),
   slate:    () => blocks(256, 131, { rows: 8, cols: 6, mortar: 2, bevel: 3, bump: 0.2, mortarColor: [30, 32, 38], colors: [[64, 70, 82], [56, 60, 72], [72, 76, 88]], rough: 0.6, scale: 2, normalStrength: 2 }),
-  starmap:  () => starmap(512, 141, { scale: 4 })
+  starmap:  () => starmap(512, 141, { scale: 4 }),
+  bark:     () => bark(256, 151, { ridges: 8, color: [92, 80, 66], scale: 1 }),
+  wool:     () => plaster(256, 161, { color: [120, 118, 112], scale: 1 })
 };
 const cache = {};
 export function texSet(name) {
@@ -261,7 +276,9 @@ export function canvasTexture(size, draw, w) {
 export function glowTexture(rgba) {
   return canvasTexture(64, (g, s) => {
     const gr = g.createRadialGradient(s / 2, s / 2, 0, s / 2, s / 2, s / 2);
-    gr.addColorStop(0, rgba); gr.addColorStop(0.3, rgba.replace(/[\d.]+\)$/, '0.35)')); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    // a tight core with a quick falloff, like real lens glare, not a wide halo
+    gr.addColorStop(0, rgba); gr.addColorStop(0.12, rgba.replace(/[\d.]+\)$/, '0.5)'));
+    gr.addColorStop(0.35, rgba.replace(/[\d.]+\)$/, '0.1)')); gr.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = gr; g.fillRect(0, 0, s, s);
   });
 }

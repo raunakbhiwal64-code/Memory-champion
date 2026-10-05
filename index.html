@@ -241,28 +241,11 @@ details.lesson-card summary > span:first-of-type{flex:1;}
           <p class="view-desc">Buildings you know by heart. Each one holds a sequence of stations you can fill with anything you need to remember.</p>
         </div>
         <div class="btn-row">
-          <button class="btn btn-ghost" id="btn-explore-3d">Explore in 3D</button>
           <button class="btn btn-primary" id="btn-new-palace">+ New palace</button>
         </div>
       </div>
       <div id="palace-learn-tip"></div>
       <div id="palace-list"></div>
-    </section>
-
-    <!-- ============ 3D EXPLORE ============ -->
-    <section class="view" id="view-3d-explore">
-      <div class="view-head">
-        <div>
-          <button class="btn btn-ghost btn-sm" id="btn-back-3d" style="margin-bottom:12px;">← Back to palaces</button>
-          <h1 class="view-title">Explore a real place in 3D</h1>
-          <p class="view-desc">A small, hand-verified catalog of free 3D scans \u2014 real sites, not generated ones. Quality varies by source, labeled honestly below. Orbit, get properly lost and found \u2014 this is your empty run, before you place anything on top of it.</p>
-        </div>
-      </div>
-      <div class="btn-row" id="region-tabs" style="margin-bottom:12px;"></div>
-      <div class="btn-row" id="room-tabs" style="margin-bottom:16px;"></div>
-      <div id="room-embed-wrap" style="border:1px solid var(--line); border-radius:3px; overflow:hidden; background:var(--surface-2);"></div>
-      <div id="room-credit" style="font-size:11px; color:var(--ink-mute); margin-top:12px;"></div>
-      <div id="room-build-palace" style="margin-top:14px;"></div>
     </section>
 
     <!-- ============ NUMBER SYSTEMS ============ -->
@@ -295,7 +278,6 @@ details.lesson-card summary > span:first-of-type{flex:1;}
           <button class="btn btn-ghost btn-sm" id="btn-back-palaces" style="margin-bottom:12px;">← All palaces</button>
           <h1 class="view-title" id="pd-title">—</h1>
           <p class="view-desc" id="pd-desc"></p>
-          <div id="pd-basedon" style="margin-top:8px;"></div>
         </div>
         <div class="btn-row">
           <button class="btn btn-gold" id="btn-enter-castle" style="display:none;">Enter the 3D castle</button>
@@ -655,9 +637,9 @@ const CURRICULUM = [
       <p>The method of loci \u2014 Latin for "places" \u2014 is the oldest memory technique on record, used by Greek and Roman orators to deliver hour-long speeches without notes. The idea: pick a route through a place you know cold, break it into a fixed sequence of distinct stations, and mentally "place" one vivid image at each station as you walk through it. To recall, you walk the same route again in your head and pick up what you left at each stop.</p>
       <p>Horsley teaches a compact version of this he calls the <strong>Car Method</strong>: use your own car \u2014 bonnet, wing mirror, steering wheel, gear stick, glovebox, back seat \u2014 as a small, always-available palace when you don't want to build a whole building from scratch. Same principle, smaller scale.</p>
       <p>What makes a good palace, either way: stations you can picture instantly without effort, a route you always walk the same direction, and enough distance between stations that two images don't blur into one.</p>` },
-    { id:'l2-2', title:'The empty run: familiarize before you encode', gap:true, tryAction:'goto-3d', tryLabel:'Explore a real 3D room', body:`
+    { id:'l2-2', title:'The empty run: familiarize before you encode', gap:true, tryAction:'goto-castle', tryLabel:'Take an empty walk through the castle', body:`
       <p>Before you place a single item, walk the space with no job to do. This is the step most beginners skip, and skipping it is why a hastily-adopted palace falls apart under pressure: if you're still half-figuring out where the door is while also trying to encode a fact there, both processes compete and both lose.</p>
-      <p>Give any new palace one pass where the only goal is to notice it \u2014 walk the route, name each station out loud, notice what's actually distinctive about each one. Only once the layout feels boring and automatic should you start hanging images on it. If you're using this app's 3D Versailles rooms as a palace, this is exactly what that view is for: orbit around, get properly lost and then found, before you build anything on top of it. This is well-established spatial-memory principle rather than something I've traced to Horsley's own material specifically.</p>` },
+      <p>Give any new palace one pass where the only goal is to notice it \u2014 walk the route, name each station out loud, notice what's actually distinctive about each one. Only once the layout feels boring and automatic should you start hanging images on it. If you're using this app's castle as a palace, walk all eight rooms once before placing anything: follow the glowing arrow, open the map with M, get properly lost and then found. This is well-established spatial-memory principle rather than something I've traced to Horsley's own material specifically.</p>` },
     { id:'l2-3', title:'Placing information with SEE', gap:false, tryAction:'goto-palaces', tryLabel:'Open a palace and try it', body:`
       <p>Building a palace and filling it are two different skills \u2014 this lesson is the second one. At each station, don't just "put" the information there; build a full SEE-image where the station itself is part of the scene.</p>
       <p>If your third station is "kitchen counter" and the fact is "the meeting moved to Thursday," don't picture a sticky note that says Thursday \u2014 picture a giant number 4 wearing a chef's hat, deep-frying your kitchen counter, and the smoke alarm is going off. Loud, moving, ridiculous, anchored to a place you already know. Do this station by station, in order, and you're not memorizing a list anymore \u2014 you're remembering a walk you took.</p>` },
@@ -783,7 +765,7 @@ function openLessonById(id){
 function runTryAction(action){
   if(action==='goto-palaces'){ go('palaces','palaces'); renderPalaceList(); }
   else if(action==='goto-library'){ go('library','library'); renderDeckList(); }
-  else if(action==='goto-3d'){ open3DExplore(); }
+  else if(action==='goto-castle'){ openOrCreateCastle('study'); }
   else if(action==='goto-numbersystem'){ openNumberSystem('major'); }
   else if(action==='goto-pao'){ openNumberSystem('pao'); }
   else if(action && action.indexOf('drill:')===0){
@@ -992,7 +974,6 @@ function renderPalaceList(){
         </div>
         <h3 style="font-size:18px;">${escapeHtml(p.name)}</h3>
         <p style="color:var(--ink-mute); font-size:12.5px; margin-top:6px;">${escapeHtml(p.description||'No description')}</p>
-        ${p.basedOn ? `<div class="pill pill-blue" style="margin-top:10px;">3D reference: ${escapeHtml(p.basedOn.name)}</div>` : ''}
         <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
           <span style="font-size:11.5px; color:var(--ink-mute);" class="mono">${filled}/${p.loci.length} stations filled</span>
           ${isCastle(p) ? `<button class="btn btn-sm btn-gold palace-enter-castle" data-id="${p.id}">Enter castle</button>` : ''}
@@ -1015,15 +996,6 @@ function openPalace(id){
   const p = getCurrentPalace(); if(!p) return;
   document.getElementById('pd-title').textContent = p.name;
   document.getElementById('pd-desc').textContent = p.description || '';
-  const basedOnRoot = document.getElementById('pd-basedon');
-  basedOnRoot.innerHTML = p.basedOn
-    ? `<button class="btn btn-sm btn-ghost pd-view-3d">View "${escapeHtml(p.basedOn.name)}" in 3D \u2192</button>`
-    : '';
-  const view3dBtn = basedOnRoot.querySelector('.pd-view-3d');
-  if(view3dBtn) view3dBtn.addEventListener('click', ()=>{
-    if(PALACE_CATALOG.find(r=>r.id===p.basedOn.catalogId)) current3DRoom = p.basedOn.catalogId;
-    open3DExplore();
-  });
   const castle = isCastle(p);
   document.getElementById('btn-enter-castle').style.display = castle ? '' : 'none';
   document.getElementById('btn-add-locus').style.display = castle ? 'none' : '';
@@ -1322,115 +1294,6 @@ function wirePalaceDetailButtons(){
   document.getElementById('btn-back-palaces').addEventListener('click', ()=>{ go('palaces','palaces'); renderPalaceList(); });
 }
 
-/* ---- 3D exploration: hand-verified, real, embeddable content only.
-   No live "pull anything" API exists for this, so this is a small
-   curated catalog, honestly labeled by source quality, that can grow
-   over time as more verified entries are found.
-   kind: 'sketchfab' (interactive 3D model) or 'youtube360' (360 video,
-   embedded as a plain iframe \u2014 no extra library, easiest to keep adding to). ---- */
-const PALACE_CATALOG = [
-  { id:'glaces', kind:'sketchfab', name:'Hall of Mirrors', place:'Palace of Versailles, France', region:'international', type:'palace',
-    tier:'Official museum scan', uid:'d06415253af04077a82e056282173b65',
-    credit:'Ch\u00e2teau de Versailles, via Sketchfab, in partnership with Google Arts & Culture', creditUrl:'https://en.chateauversailles.fr/discover/resources/versailles-3d' },
-  { id:'chapelle', kind:'sketchfab', name:'Royal Chapel', place:'Palace of Versailles, France', region:'international', type:'palace',
-    tier:'Official museum scan', uid:'0a4b8a6048b8407a8c89b5afdbadc35b',
-    credit:'Ch\u00e2teau de Versailles, via Sketchfab, in partnership with Google Arts & Culture', creditUrl:'https://en.chateauversailles.fr/discover/resources/versailles-3d' },
-  { id:'chambreroi', kind:'sketchfab', name:"King's Chamber", place:'Palace of Versailles, France', region:'international', type:'palace',
-    tier:'Official museum scan', uid:'b76e627e5b44494491840a4d7fb41d3b',
-    credit:'Ch\u00e2teau de Versailles, via Sketchfab, in partnership with Google Arts & Culture', creditUrl:'https://en.chateauversailles.fr/discover/resources/versailles-3d' },
-  { id:'gatewayindia', kind:'sketchfab', name:'Gateway of India', place:'Mumbai, India', region:'india', type:'monument',
-    tier:'Professional heritage scan', uid:'38a652e9f3bf49039026ef65ef61ac92',
-    credit:"CyArk (heritage-preservation nonprofit), via Sketchfab \u2014 LiDAR + photogrammetry. It's a monument, not a palace, but the best-quality free Indian scan I could verify", creditUrl:'https://sketchfab.com/CyArk' },
-  { id:'mysore', kind:'sketchfab', name:'Mysore Palace', place:'Mysuru, Karnataka, India', region:'india', type:'palace',
-    tier:'Community scan \u2014 unreliable embed', uid:'0439ee6964c94a10bf9767088469bb94', linkOnly:true,
-    credit:"Built by a Sketchfab user (ryangarnett) from 4 photographs and satellite imagery. It doesn't reliably display in the embedded viewer here \u2014 confirmed by a real report, not a guess \u2014 so this opens directly on Sketchfab instead of trying to embed it", creditUrl:'https://sketchfab.com/3d-models/mysore-palace-0439ee6964c94a10bf9767088469bb94' },
-  { id:'tajmahal', kind:'youtube360', name:'Taj Mahal', place:'Agra, India', region:'india', type:'monument',
-    tier:'Community 360\u00b0 video tour', videoId:'Zt-E7i3cSHg',
-    credit:"A YouTube creator's 360\u00b0 walkthrough, titled and uploaded as spherical video. It's a mausoleum, not a palace, but too iconic to leave out. I haven't independently confirmed the spherical metadata renders correctly in every browser \u2014 if drag-to-look doesn't kick in, open it directly on YouTube", creditUrl:'https://www.youtube.com/watch?v=Zt-E7i3cSHg' },
-  { id:'amerfort', kind:'youtube360', name:'Amer Fort (Amber Palace)', place:'Jaipur, Rajasthan, India', region:'india', type:'palace',
-    tier:'Community 360\u00b0 video tour', videoId:'wEkhDyLApXo',
-    credit:"A YouTube creator's 360\u00b0 walkthrough, titled and uploaded as spherical video. I haven't independently confirmed the spherical metadata renders correctly in every browser \u2014 if drag-to-look doesn't kick in, open it directly on YouTube", creditUrl:'https://www.youtube.com/watch?v=wEkhDyLApXo' },
-  { id:'citypalacejaipur', kind:'youtube360', name:'City Palace', place:'Jaipur, Rajasthan, India', region:'india', type:'palace',
-    tier:'Community 360\u00b0 video tour', videoId:'Fh-7UE81Bgk',
-    credit:"A YouTube creator's 360\u00b0 VR tour, titled and uploaded as spherical video. Same caveat as Amer Fort \u2014 open on YouTube directly if it plays flat instead of draggable", creditUrl:'https://www.youtube.com/watch?v=Fh-7UE81Bgk' }
-];
-let current3DRegion = 'all';
-let current3DRoom = PALACE_CATALOG[0].id;
-function embedKindLabel(kind){
-  if(kind==='sketchfab') return '3D model';
-  if(kind==='youtube360') return '360\u00b0 video';
-  return kind;
-}
-function render3DExplore(){
-  const regionRoot = document.getElementById('region-tabs');
-  const regions = [['all','All'],['india','India'],['international','International']];
-  regionRoot.innerHTML = regions.map(([key,label])=>`<button class="btn btn-sm ${current3DRegion===key?'btn-gold':'btn-ghost'} region-tab-btn" data-region="${key}">${label}</button>`).join('');
-  regionRoot.querySelectorAll('.region-tab-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      current3DRegion = btn.dataset.region;
-      const visible = PALACE_CATALOG.filter(r=>current3DRegion==='all' || r.region===current3DRegion);
-      if(!visible.find(r=>r.id===current3DRoom) && visible.length) current3DRoom = visible[0].id;
-      render3DExplore();
-    });
-  });
-
-  const visible = PALACE_CATALOG.filter(r=>current3DRegion==='all' || r.region===current3DRegion);
-  const tabsRoot = document.getElementById('room-tabs');
-  tabsRoot.innerHTML = visible.map(r=>`<button class="btn btn-sm ${r.id===current3DRoom?'btn-primary':'btn-ghost'} room-tab-btn" data-room="${r.id}">${escapeHtml(r.name)} <span class="mono" style="opacity:.6; font-size:9.5px;">${embedKindLabel(r.kind)}</span></button>`).join('');
-  tabsRoot.querySelectorAll('.room-tab-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ current3DRoom = btn.dataset.room; render3DExplore(); });
-  });
-
-  const room = PALACE_CATALOG.find(r=>r.id===current3DRoom) || visible[0];
-  const wrap = document.getElementById('room-embed-wrap');
-  const creditRoot = document.getElementById('room-credit');
-  if(!room){
-    wrap.innerHTML = `<div style="padding:40px; text-align:center; color:var(--ink-mute);">Nothing in this filter yet.</div>`;
-    creditRoot.innerHTML = '';
-    return;
-  }
-
-  if(room.kind==='sketchfab' && !room.linkOnly){
-    wrap.innerHTML = `<iframe title="${escapeHtml(room.name)}" style="width:100%; height:60vh; display:block; border:0;" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen src="https://sketchfab.com/models/${room.uid}/embed"></iframe>
-      <div style="padding:8px 12px; border-top:1px solid var(--line); background:var(--surface-2);"><a href="${room.creditUrl}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--blue);">Not showing correctly? Open on Sketchfab instead \u2192</a></div>`;
-  } else if(room.kind==='youtube360'){
-    wrap.innerHTML = `<iframe title="${escapeHtml(room.name)}" style="width:100%; height:60vh; display:block; border:0;" allow="autoplay; fullscreen; xr-spatial-tracking" allowfullscreen src="https://www.youtube.com/embed/${room.videoId}"></iframe>
-      <div style="padding:8px 12px; border-top:1px solid var(--line); background:var(--surface-2);"><a href="${room.creditUrl}" target="_blank" rel="noopener" style="font-size:11.5px; color:var(--blue);">Not showing correctly? Open on YouTube instead \u2192</a></div>`;
-  } else if(room.linkOnly){
-    wrap.innerHTML = `<div style="padding:50px 24px; text-align:center;">
-      <p style="color:var(--ink-dim); font-size:13.5px; margin-bottom:16px;">This one doesn't reliably display in the built-in viewer.</p>
-      <a class="btn btn-primary btn-sm" href="${room.creditUrl}" target="_blank" rel="noopener" style="text-decoration:none;">Open on Sketchfab \u2192</a>
-    </div>`;
-  }
-  creditRoot.innerHTML = `<strong>${escapeHtml(room.name)}</strong>, ${escapeHtml(room.place)} \u2014 <span class="pill ${room.tier.indexOf('Official')===0?'pill-gold':'pill-blue'}" style="margin:0 6px;">${escapeHtml(room.tier)}</span><span class="pill" style="margin-right:6px;">${embedKindLabel(room.kind)}</span><br>${escapeHtml(room.credit)}. <a href="${room.creditUrl}" target="_blank" rel="noopener">Source \u2192</a>`;
-
-  const existingPalace = DB.palaces.find(p=>p.basedOn && p.basedOn.catalogId===room.id);
-  const buildRoot = document.getElementById('room-build-palace');
-  buildRoot.innerHTML = existingPalace
-    ? `<button class="btn btn-gold btn-sm" id="btn-build-palace">Open your palace here \u2014 ${existingPalace.loci.length} station${existingPalace.loci.length===1?'':'s'} so far</button>`
-    : `<button class="btn btn-gold btn-sm" id="btn-build-palace">Build a palace here</button>`;
-  document.getElementById('btn-build-palace').addEventListener('click', buildPalaceFromPlace);
-}
-async function buildPalaceFromPlace(){
-  const room = PALACE_CATALOG.find(r=>r.id===current3DRoom);
-  if(!room) return;
-  const existing = DB.palaces.find(p=>p.basedOn && p.basedOn.catalogId===room.id);
-  if(existing){ openPalace(existing.id); return; }
-  const p = {id:uid(), name:`${room.name}, ${room.place}`, description:'Based on the 3D reference in this app\u2019s catalog.', loci:[], createdAt:Date.now(), basedOn:{catalogId:room.id, name:room.name, place:room.place}};
-  DB.palaces.unshift(p);
-  await savePalaces();
-  toast('Palace created \u2014 walk it first, then add stations for what you actually saw');
-  openPalace(p.id);
-}
-function open3DExplore(){
-  go('3d-explore', null);
-  render3DExplore();
-}
-function wire3DExploreButtons(){
-  document.getElementById('btn-explore-3d').addEventListener('click', open3DExplore);
-  document.getElementById('btn-back-3d').addEventListener('click', ()=>{ go('palaces','palaces'); renderPalaceList(); });
-}
-
 /* ---- The Keep: a generated 3D castle palace, rendered by the castle
    engine module (src/castle). Layout lives here so the data layer, the
    2D fallback and the tests all work without WebGL. Grid is in tiles of
@@ -1458,7 +1321,8 @@ const CASTLE_DOORS = [
   { x0:27, z0:18, x1:28, z1:18 }, { x0:22, z0:24, x1:22, z1:25 }
 ];
 const CASTLE_DOOR_H = 4.2;
-const CASTLE_START = { x:34, z:54.4, yaw:0 };
+// you start just inside the gate, facing the castle doors (yaw PI looks north, towards -z)
+const CASTLE_START = { x:34, z:54.4, yaw:Math.PI };
 const CASTLE_STATIONS = [
   ['courtyard','Iron gate','gate',34,59.2,'n'],
   ['courtyard','Stone fountain','fountain',28.5,53,'e'],
@@ -2571,7 +2435,6 @@ async function init(){
   wireNav();
   wirePalaceDetailButtons();
   wireDeckDetailButtons();
-  wire3DExploreButtons();
   wireNumberSystemButtons();
   wireCastleFallback();
   document.getElementById('btn-new-palace').addEventListener('click', showNewPalaceModal);

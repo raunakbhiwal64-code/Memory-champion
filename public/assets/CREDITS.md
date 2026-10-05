@@ -16,6 +16,8 @@ All 3D models and textures in this folder come from [Poly Haven](https://polyhav
 - Monastery Stone Floor (`monastery_stone_floor`) — used for "wetstone" — https://polyhaven.com/a/monastery_stone_floor
 - Rock Tile Floor 02 (`rock_tile_floor_02`) — used for "flag" — https://polyhaven.com/a/rock_tile_floor_02
 - Roof Slates 02 (`roof_slates_02`) — used for "slate" — https://polyhaven.com/a/roof_slates_02
+- Jolcham Oak Bark 01 (`jolcham_oak_bark_01`) — used for "bark" — https://polyhaven.com/a/jolcham_oak_bark_01
+- Rough Linen (`rough_linen`) — used for "wool" — https://polyhaven.com/a/rough_linen
 
 ## Models
 - Large Iron Gate — https://polyhaven.com/a/large_iron_gate
@@ -55,3 +57,7 @@ All 3D models and textures in this folder come from [Poly Haven](https://polyhav
 - Jug 01 — https://polyhaven.com/a/jug_01
 - Spinning Wheel 01 — https://polyhaven.com/a/spinning_wheel_01
 - Painted Wooden Shelves — https://polyhaven.com/a/painted_wooden_shelves
+- Street Lamp 01 — https://polyhaven.com/a/street_lamp_01
+- Street Lamp 02 — https://polyhaven.com/a/street_lamp_02
+- Fern 02 — https://polyhaven.com/a/fern_02
+- Shrub 02 — https://polyhaven.com/a/shrub_02

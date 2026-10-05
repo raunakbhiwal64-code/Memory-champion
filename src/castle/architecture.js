@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { S } from './state.js';
 import { surfaceMat, mat, M } from './materials.js';
-import { canvasTexture, glowTexture, rng } from './textures.js';
+import { canvasTexture, glowTexture, rng, texSet } from './textures.js';
 
 const T = CASTLE_TILE;
 const DOOR_H = CASTLE_DOOR_H;
@@ -56,6 +56,37 @@ function floorQuad(b, name, m, x0, z0, x1, z1, y, down) {
   else b.quad(name, m, [[x0, y, z0], [x1, y, z0], [x1, y, z1], [x0, y, z1]], [0, -1, 0], uv);
 }
 
+/* A band standing proud of a wall: a plinth at its foot or a cornice under the
+   ceiling. Front, top and underside faces, plus end caps where it stops. */
+function wallBand(b, name, m, ex0, ez0, ex1, ez1, nx, nz, y0, y1, depth) {
+  const ox = nx * depth, oz = nz * depth, s = m.userData.scale || 3;
+  wallQuad(b, name, m, ex0 + ox, ez0 + oz, ex1 + ox, ez1 + oz, y0, y1, nx, nz);
+  // top face, seen from above
+  const topP = [[ex0 + ox, y1, ez0 + oz], [ex1 + ox, y1, ez1 + oz], [ex1, y1, ez1], [ex0, y1, ez0]];
+  const huv = p => [p[0] / s, p[2] / s];
+  b.quad(name, m, topP, [0, 1, 0], topP.map(huv));
+  if (y0 > 0.01) {
+    const botP = [[ex0, y0, ez0], [ex1, y0, ez1], [ex1 + ox, y0, ez1 + oz], [ex0 + ox, y0, ez0 + oz]];
+    b.quad(name, m, botP, [0, -1, 0], botP.map(huv));
+  }
+  // end caps
+  const ax = Math.sign(ex1 - ex0), az = Math.sign(ez1 - ez0);
+  const cap = (x, z, dx, dz) => {
+    const p = [[x, y0, z], [x + ox, y0, z + oz], [x + ox, y1, z + oz], [x, y1, z]];
+    // ABCD winds towards (-oz, ox); flip it when the cap faces the other way
+    if (ox * dz - oz * dx < 0) p.reverse();
+    b.quad(name, m, p, [dx, 0, dz], [[0, y0 / s], [depth / s, y0 / s], [depth / s, y1 / s], [0, y1 / s]]);
+  };
+  cap(ex0, ez0, -ax, -az); cap(ex1, ez1, ax, az);
+}
+const PLINTH = { plaster: 'beam', panel: 'beam' };
+
+// geometry with UVs in metres -> UVs in texture tiles, like the walls
+export function metreUVs(geo, texName) {
+  const k = 1 / (texSet(texName).scale || 1), uv = geo.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * k, uv.getY(i) * k);
+  return geo;
+}
 function at(o, x, y, z) { o.position.set(x, y, z); return o; }
 export function roomOfCell(tx, tz) { const c = castleCellAt(tx, tz); return c >= 0 ? CASTLE_ROOMS[c] : null; }
 function roomAxis(r) { const lx = (r.x1 - r.x0 + 1) * T, lz = (r.z1 - r.z0 + 1) * T; return { lx, lz, longX: lx >= lz }; }
@@ -69,6 +100,13 @@ function wallTop(r, dir) {
     return longEdge ? vaultSpring(r) : r.h;
   }
   return r.h;
+}
+
+// a stepped moulding: a deep top course over a narrower one
+function buildCornice(b, room, ex0, ez0, ex1, ez1, nx, nz, top) {
+  const m = surfaceMat(room.wall === 'panel' || room.wall === 'plaster' ? 'beam' : 'ashlar');
+  wallBand(b, 'cornice_' + m.uuid, m, ex0, ez0, ex1, ez1, nx, nz, top - 0.32, top - 0.02, 0.2);
+  wallBand(b, 'cornice_' + m.uuid, m, ex0, ez0, ex1, ez1, nx, nz, top - 0.52, top - 0.32, 0.1);
 }
 
 export function buildArchitecture() {
@@ -94,9 +132,17 @@ export function buildArchitecture() {
         const top = room ? wallTop(room, dir) : DOOR_H;
         const m = room ? surfaceMat(room.wall) : doorMat;
         wallQuad(b, 'wall_' + (room ? room.wall : 'door'), m, ex0, ez0, ex1, ez1, 0, top, nx, nz);
+        if (room) {
+          const pm = PLINTH[room.wall] || (room.wall === 'rubble' ? 'rubble' : 'flag');
+          wallBand(b, 'plinth_' + pm, surfaceMat(pm), ex0, ez0, ex1, ez1, nx, nz, 0, PLINTH[room.wall] ? 0.28 : 0.42, PLINTH[room.wall] ? 0.05 : 0.11);
+          if (room.ceiling === 'beams' || room.ceiling === 'coffer' || room.ceiling === 'hammer' || (room.ceiling === 'vault' && top < room.h) || room.ceiling === 'dome')
+            buildCornice(b, room, ex0, ez0, ex1, ez1, nx, nz, top);
+        }
       } else if (room && nc === -2) {
         // header above a doorway, on this room's side
         wallQuad(b, 'wall_' + room.wall, surfaceMat(room.wall), ex0, ez0, ex1, ez1, DOOR_H, wallTop(room, dir), nx, nz);
+        if (room.ceiling === 'beams' || room.ceiling === 'coffer' || room.ceiling === 'hammer' || (room.ceiling === 'vault' && wallTop(room, dir) < room.h) || room.ceiling === 'dome')
+          buildCornice(b, room, ex0, ez0, ex1, ez1, nx, nz, wallTop(room, dir));
       }
     }
   }
@@ -268,15 +314,15 @@ function buildDoorSurround(d) {
   const alongX = d.x1 - d.x0 >= d.z1 - d.z0 && d.z0 === d.z1;
   const w = alongX ? (d.x1 - d.x0 + 1) * T : (d.z1 - d.z0 + 1) * T;
   const cx = (d.x0 + d.x1 + 1) / 2 * T, cz = (d.z0 + d.z1 + 1) / 2 * T;
+  // one outline that runs up the jamb, over the arch and down again, open at
+  // the bottom (a hole touching the outer edge would fail to triangulate and
+  // leave a solid slab across the doorway)
+  const ow = w / 2 + 0.55, oh = DOOR_H + 0.7, hw = w / 2, spring = DOOR_H - Math.min(hw, DOOR_H * 0.45);
   const outer = new THREE.Shape();
-  const ow = w / 2 + 0.55, oh = DOOR_H + 0.7;
-  outer.moveTo(-ow, 0); outer.lineTo(ow, 0); outer.lineTo(ow, oh); outer.lineTo(-ow, oh); outer.lineTo(-ow, 0);
-  const hole = new THREE.Path(); const hw = w / 2, spring = DOOR_H - Math.min(hw, DOOR_H * 0.45);
-  hole.moveTo(-hw, -0.01); hole.lineTo(hw, -0.01); hole.lineTo(hw, spring);
-  hole.absellipse(0, spring, hw, DOOR_H - spring, 0, Math.PI, false);
-  hole.lineTo(-hw, -0.01);
-  outer.holes.push(hole);
-  const geo = new THREE.ExtrudeGeometry(outer, { depth: 0.18, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 2, curveSegments: 24 });
+  outer.moveTo(-ow, 0); outer.lineTo(-hw, 0); outer.lineTo(-hw, spring);
+  outer.absellipse(0, spring, hw, DOOR_H - spring, Math.PI, 0, true);
+  outer.lineTo(hw, 0); outer.lineTo(ow, 0); outer.lineTo(ow, oh); outer.lineTo(-ow, oh); outer.lineTo(-ow, 0);
+  const geo = metreUVs(new THREE.ExtrudeGeometry(outer, { depth: 0.18, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 2, curveSegments: 24 }), 'ashlar');
   const m = mat(0xa89c88, { roughness: 0.85, tex: 'ashlar' });
   const thick = T; // the wall line is one tile thick
   for (const side of [-1, 1]) {
@@ -297,7 +343,11 @@ const WINDOWS = [
   ['library', 'n', 30, 6.2, 1.4, 3.2, 'lancet'], ['library', 'n', 38, 6.2, 1.4, 3.2, 'lancet'], ['library', 'e', 19, 6.2, 1.4, 3.2, 'lancet'],
   ['entrance', 's', 27.5, 3, 1.5, 4.5, 'lancet'], ['entrance', 's', 40.5, 3, 1.5, 4.5, 'lancet'],
   ['dungeon', 'n', 57, 2.4, 1.0, 0.8, 'slit'], ['dungeon', 'n', 63, 2.4, 1.0, 0.8, 'slit'],
-  ['armoury', 'e', 29, 3.2, 1.4, 3.2, 'lancet']
+  ['armoury', 'e', 29, 3.2, 1.4, 3.2, 'lancet'],
+  // lit rooms above the courtyard: warm candlelight behind leaded glass
+  ['courtyard', 'n', 27.4, 5.2, 1.2, 2.5, 'lit'], ['courtyard', 'n', 40.6, 5.2, 1.2, 2.5, 'lit'], ['courtyard', 'n', 34, 6.0, 1.0, 2.0, 'lit'],
+  ['courtyard', 'w', 50.6, 5.4, 1.1, 2.3, 'lit'], ['courtyard', 'w', 58, 5.6, 1.0, 2.0, 'lit'],
+  ['courtyard', 'e', 47.6, 5.4, 1.1, 2.3, 'lit'], ['courtyard', 'e', 53.2, 5.5, 1.1, 2.3, 'lit']
 ];
 function stainedGlass() {
   return canvasTexture(256, (g, s) => {
@@ -316,6 +366,19 @@ function stainedGlass() {
     g.fillStyle = '#f0d070'; g.beginPath(); g.arc(cx, cy, s / 14, 0, Math.PI * 2); g.fill();
   });
 }
+function warmGlass() {
+  return canvasTexture(128, (g, s) => {
+    g.fillStyle = '#c47a2c'; g.fillRect(0, 0, s, s);
+    const r = rng(19);
+    for (let y = 0; y < s; y += 16) for (let x = 0; x < s; x += 16) { g.fillStyle = `rgba(255,${170 + r() * 50},${80 + r() * 50},${0.25 + r() * 0.4})`; g.fillRect(x, y, 16, 16); }
+    // a soft glow from a lamp somewhere inside, brighter low down
+    const gr = g.createRadialGradient(s * 0.5, s * 0.75, 4, s * 0.5, s * 0.7, s * 0.8);
+    gr.addColorStop(0, 'rgba(255,220,150,.55)'); gr.addColorStop(1, 'rgba(60,20,0,.35)');
+    g.fillStyle = gr; g.fillRect(0, 0, s, s);
+    g.strokeStyle = '#1a120a'; g.lineWidth = 2.5;
+    for (let i = -s; i < s * 2; i += 16) { g.beginPath(); g.moveTo(i, 0); g.lineTo(i + s, s); g.stroke(); g.beginPath(); g.moveTo(i, s); g.lineTo(i + s, 0); g.stroke(); }
+  });
+}
 function leadedGlass() {
   return canvasTexture(128, (g, s) => {
     g.fillStyle = '#3a5684'; g.fillRect(0, 0, s, s);
@@ -327,7 +390,7 @@ function leadedGlass() {
 }
 let shaftTex = null;
 function buildWindows() {
-  const glassTex = leadedGlass(), roseTex = stainedGlass();
+  const glassTex = leadedGlass(), roseTex = stainedGlass(), litTex = warmGlass();
   shaftTex = shaftTex || canvasTexture(128, (g, s) => {
     const img = g.createImageData(s, s);
     for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) {
@@ -355,8 +418,8 @@ function buildWindows() {
       else { shape.quadraticCurveTo(hw, h - hw * 0.2, 0, h); shape.quadraticCurveTo(-hw, h - hw * 0.2, -hw, springY); }
       shape.lineTo(-hw, 0);
     }
-    const isRose = style === 'rose';
-    const glassMat = new THREE.MeshStandardMaterial({ map: isRose ? roseTex : glassTex, emissive: 0xffffff, emissiveMap: isRose ? roseTex : glassTex, emissiveIntensity: isRose ? 1.6 : 0.9, roughness: 0.2 });
+    const isRose = style === 'rose', lit = style === 'lit', tex = isRose ? roseTex : lit ? litTex : glassTex;
+    const glassMat = new THREE.MeshStandardMaterial({ map: tex, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: isRose ? 1.6 : lit ? 1.25 : 0.9, roughness: 0.2 });
     const glass = new THREE.Mesh(new THREE.ShapeGeometry(shape, 24), glassMat);
     // normalise UVs to 0..1 for the glass texture
     const uv = glass.geometry.attributes.uv; const bb = new THREE.Box2(new THREE.Vector2(-w / 2, isRose ? -w / 2 : 0), new THREE.Vector2(w / 2, isRose ? w / 2 : h));
@@ -366,11 +429,18 @@ function buildWindows() {
     const frameShape = new THREE.Shape(); const fw = w / 2 + 0.3;
     if (isRose) { frameShape.absarc(0, 0, fw, 0, Math.PI * 2, false); const hole = new THREE.Path(); hole.absarc(0, 0, w / 2, 0, Math.PI * 2, true); frameShape.holes.push(hole); }
     else { frameShape.moveTo(-fw, -0.3); frameShape.lineTo(fw, -0.3); frameShape.lineTo(fw, h + 0.3); frameShape.lineTo(-fw, h + 0.3); frameShape.lineTo(-fw, -0.3); frameShape.holes.push(new THREE.Path(shape.getPoints(24))); }
-    const frame = new THREE.Mesh(new THREE.ExtrudeGeometry(frameShape, { depth: 0.22, bevelEnabled: false, curveSegments: 24 }), mat(0x9a8e7c, { roughness: 0.85, tex: 'ashlar' }));
+    const frame = new THREE.Mesh(metreUVs(new THREE.ExtrudeGeometry(frameShape, { depth: 0.22, bevelEnabled: false, curveSegments: 24 }), 'ashlar'), mat(0x9a8e7c, { roughness: 0.85, tex: 'ashlar' }));
     grp.add(frame);
     if (!isRose) { // mullion and transom
       if (style !== 'slit') grp.add(at(new THREE.Mesh(new THREE.BoxGeometry(0.08, h, 0.1), M.iron()), 0, h / 2, 0.05));
       grp.add(at(new THREE.Mesh(new THREE.BoxGeometry(w, 0.07, 0.1), M.iron()), 0, h * 0.45, 0.05));
+    }
+    if (lit) {
+      // seen from outside: a sill below and the glass set back in a deep reveal
+      grp.add(at(new THREE.Mesh(metreUVs(new THREE.BoxGeometry(w + 0.7, 0.14, 0.42), 'ashlar'), mat(0x9a8e7c, { roughness: 0.85, tex: 'ashlar' })), 0, -0.36, 0.2));
+      grp.position.set(px, sill, pz); grp.rotation.y = rotY;
+      S.scene.add(grp);
+      continue;
     }
     // light shaft: soft additive plane slanting down into the room
     const shaft = new THREE.Mesh(new THREE.PlaneGeometry(w * 1.1, Math.max(4, sill + h)), new THREE.MeshBasicMaterial({ map: shaftTex, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, opacity: isRose ? 0.45 : 0.3 }));

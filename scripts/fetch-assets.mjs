@@ -16,7 +16,7 @@ const TMP = path.resolve('.asset-cache');
 const FORCE = process.argv.includes('--force');
 const FORCE_MODELS = FORCE || process.argv.includes('--models');
 // triangle budget per model: big centrepieces get more detail than small table-top props
-const TRI_BUDGET = { large_iron_gate: 16000, treasure_chest: 14000, cannon_01: 14000, vintage_cabinet_01: 12000, Chandelier_03: 9000, WoodenChair_01: 14000, gothic_statue: 14000, lion_head: 9000, marble_bust_01: 9000 };
+const TRI_BUDGET = { large_iron_gate: 16000, treasure_chest: 14000, cannon_01: 14000, vintage_cabinet_01: 12000, Chandelier_03: 9000, WoodenChair_01: 14000, gothic_statue: 14000, lion_head: 9000, marble_bust_01: 9000, street_lamp_01: 9000, street_lamp_02: 8000, shrub_02: 20000, shrub_04: 16000, moss_01: 8000 };
 const DEFAULT_TRIS = 6000;
 
 // castle surface name -> Poly Haven texture id
@@ -33,7 +33,9 @@ const TEXTURES = {
   beam: 'dark_wood',
   wetstone: 'monastery_stone_floor',
   flag: 'rock_tile_floor_02',
-  slate: 'roof_slates_02'
+  slate: 'roof_slates_02',
+  bark: 'jolcham_oak_bark_01',
+  wool: 'rough_linen'
 };
 // Poly Haven model id -> max texture size (small props get smaller textures)
 const MODELS = {
@@ -44,7 +46,8 @@ const MODELS = {
   ornate_war_hammer: 512, wooden_axe: 512, vintage_cabinet_01: 1024, brass_goblets: 512, Chandelier_03: 1024,
   lantern_chandelier_01: 1024, wooden_crate_01: 1024, wooden_crate_02: 1024, wine_barrel_01: 1024, wooden_bucket_01: 512,
   wooden_lantern_01: 512, GothicCabinet_01: 1024, GothicCommode_01: 1024, gothic_statue: 1024, horse_statue_01: 1024,
-  lion_head: 1024, jug_01: 512, spinning_wheel_01: 1024, painted_wooden_shelves: 1024
+  lion_head: 1024, jug_01: 512, spinning_wheel_01: 1024, painted_wooden_shelves: 1024,
+  street_lamp_01: 1024, street_lamp_02: 1024, fern_02: 1024, shrub_02: 1024
 };
 
 const api = p => `https://api.polyhaven.com/${p}`;

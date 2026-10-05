@@ -4,6 +4,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { S } from './state.js';
 
@@ -17,7 +18,7 @@ export const QUALITY = {
 const POOL = 8, SHADOW_LIGHTS = 1;
 const pool = [];
 let moon, lantern, hemi, frameNo = 0, lastAssign = -1;
-let bloomPass, aoPass;
+let bloomPass, aoPass, gradePass;
 
 export function initRenderer(container) {
   const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -58,7 +59,10 @@ export function initLighting() {
 
 export function initComposer() {
   const { renderer, scene, camera } = S;
-  const composer = new EffectComposer(renderer);
+  // a multisampled target keeps edges smooth once post-processing is on
+  const size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const target = new THREE.WebGLRenderTarget(Math.max(1, size.x), Math.max(1, size.y), { type: THREE.HalfFloatType, samples: 4 });
+  const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
   aoPass = new GTAOPass(scene, camera, 1, 1);
   aoPass.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1.5, thickness: 1, scale: 1.2 });
@@ -69,11 +73,35 @@ export function initComposer() {
   const aoRender = aoPass.render.bind(aoPass);
   aoPass.render = (...args) => { const vis = fx.map(o => o.visible); fx.forEach(o => { o.visible = false; }); aoRender(...args); fx.forEach((o, i) => { o.visible = vis[i]; }); };
   composer.addPass(aoPass);
-  bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.55, 0.55, 0.82);
+  // only genuinely bright things (flames, the moon in glass) should bloom
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.32, 0.4, 0.92);
   composer.addPass(bloomPass);
   composer.addPass(new OutputPass());
+  gradePass = new ShaderPass(GRADE);
+  composer.addPass(gradePass);
   S.composer = composer;
 }
+
+/* Final grade, in display space: a gentle filmic S-curve, slightly cooler
+   shadows and warmer highlights, a lens vignette and fine moving grain. */
+const GRADE = {
+  uniforms: { tDiffuse: { value: null }, time: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse; uniform float time; varying vec2 vUv;
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+    void main(){
+      vec4 c = texture2D(tDiffuse, vUv);
+      vec3 col = c.rgb;
+      float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
+      col = mix(col, col * vec3(0.94, 0.98, 1.06), 1.0 - smoothstep(0.0, 0.35, l));
+      col = mix(col, col * vec3(1.04, 1.0, 0.95), smoothstep(0.45, 1.0, l));
+      col = mix(col, col * col * (3.0 - 2.0 * col), 0.25);
+      vec2 d = vUv - 0.5;
+      col *= mix(1.0, 0.68, smoothstep(0.2, 0.75, dot(d, d) * 2.2));
+      col += (hash(vUv * 1024.0 + fract(time) * 97.0) - 0.5) * 0.022;
+      gl_FragColor = vec4(col, c.a);
+    }`
+};
 
 export function applyQuality(name) {
   const q = QUALITY[name] || QUALITY.medium;
@@ -100,6 +128,7 @@ function score(src, px, pz, room) {
 export function updateLights(t, dt) {
   const P = S.player, room = S.currentRoom;
   frameNo++;
+  if (gradePass) gradePass.uniforms.time.value = t;
   // re-pick which sources get a real light four times a second
   if (t - lastAssign > 0.25) {
     lastAssign = t;

@@ -3,6 +3,7 @@ import { S, FACE_YAW } from './state.js';
 import { mat, M } from './materials.js';
 import { canvasTexture, glowTexture, rng } from './textures.js';
 import { REPLACED_PROPS } from './assets.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /* One distinct object per station, built from primitives with physically
    based materials. Local frame: stands on y=0, front faces +z.
@@ -27,6 +28,64 @@ function cyl(rt,rb,h,m,x,y,z,seg){ const o = new THREE.Mesh(new THREE.CylinderGe
 function sph(r,m,x,y,z,ws,hs){ const o = new THREE.Mesh(new THREE.SphereGeometry(r, ws||18, hs||14), m); o.position.set(x||0,y||0,z||0); return o; }
 function cone(r,h,m,x,y,z,seg){ const o = new THREE.Mesh(new THREE.ConeGeometry(r,h,seg||16), m); o.position.set(x||0,y||0,z||0); return o; }
 function torus(r,t,m,x,y,z,arc){ const o = new THREE.Mesh(new THREE.TorusGeometry(r,t,10,36,arc||Math.PI*2), m); o.position.set(x||0,y||0,z||0); return o; }
+/* A tapered tube along a curve; UVs in metres / scale so tiled bark keeps its size. */
+function taperTube(curve, r0, r1, segs, radial, scale){
+  const frames = curve.computeFrenetFrames(segs, false), pos = [], nor = [], uv = [], idx = [];
+  for(let i=0; i<=segs; i++){
+    const t = i/segs, p = curve.getPointAt(t), r = r0 + (r1 - r0) * Math.pow(t, 0.8), N = frames.normals[i], B = frames.binormals[i];
+    for(let j=0; j<=radial; j++){
+      const a = j/radial*Math.PI*2, c = Math.cos(a), sn = Math.sin(a);
+      const nx = c*N.x + sn*B.x, ny = c*N.y + sn*B.y, nz = c*N.z + sn*B.z;
+      pos.push(p.x + nx*r, p.y + ny*r, p.z + nz*r); nor.push(nx, ny, nz);
+      uv.push(j/radial * Math.max(0.3, 2*Math.PI*r0) / scale, t * curve.getLength() / scale);
+    }
+  }
+  for(let i=0; i<segs; i++) for(let j=0; j<radial; j++){
+    const a = i*(radial+1)+j, b = a + radial + 1;
+    idx.push(a, b, a+1, b, b+1, a+1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  return g;
+}
+// An old, gnarled, leafless oak: a twisting trunk, root flare, limbs that fork twice.
+function gnarledTree(seed){
+  const r = rng(seed), geos = [], scale = 1;
+  const V = (x,y,z)=>new THREE.Vector3(x,y,z);
+  function limb(start, dir, len, r0, r1, depth){
+    const pts = [start.clone()], n = 5;
+    let p = start.clone(), d = dir.clone().normalize();
+    for(let i=1; i<=n; i++){
+      // wander, and droop a little more the thinner the limb gets
+      d.add(V((r()-0.5)*0.55, (r()-0.5)*0.35 - depth*0.04, (r()-0.5)*0.55)).normalize();
+      p = p.clone().addScaledVector(d, len/n); pts.push(p);
+    }
+    const curve = new THREE.CatmullRomCurve3(pts);
+    geos.push(taperTube(curve, r0, r1, depth < 2 ? 14 : 8, depth < 1 ? 12 : depth < 2 ? 8 : 5, scale));
+    if(depth >= 3) return;
+    const kids = depth === 0 ? 3 : 2 + (r() < 0.5 ? 1 : 0);
+    for(let k=0; k<kids; k++){
+      const t = depth === 0 ? 0.62 + k*0.13 : 0.45 + r()*0.5, at = curve.getPointAt(t), tan = curve.getTangentAt(t);
+      const yaw = (k/kids)*Math.PI*2 + r()*1.2, out = V(Math.cos(yaw), 0, Math.sin(yaw));
+      const nd = tan.clone().multiplyScalar(0.8).addScaledVector(out, depth === 0 ? 0.9 : 0.7).add(V(0, 0.25, 0));
+      const rr = r0 + (r1 - r0) * t;
+      limb(at, nd, len*(0.55 + r()*0.2), rr*0.62, rr*0.18, depth+1);
+    }
+  }
+  limb(V(0,0,0), V(0.15,1,0.05), 3.3, 0.36, 0.2, 0);
+  // root flare
+  for(let k=0; k<5; k++){
+    const a = k/5*Math.PI*2 + r()*0.6, o = V(Math.cos(a), 0, Math.sin(a));
+    const curve = new THREE.CatmullRomCurve3([V(0,0.6,0), o.clone().multiplyScalar(0.35).add(V(0,0.25,0)), o.clone().multiplyScalar(0.95).add(V(0,0.02,0)), o.clone().multiplyScalar(1.3).add(V(0,-0.08,0))]);
+    geos.push(taperTube(curve, 0.2, 0.03, 8, 8, scale));
+  }
+  const mesh = new THREE.Mesh(mergeGeometries(geos, false), mat(0x8c7a68, { roughness: 0.95, tex: 'bark' }));
+  geos.forEach(g=>g.dispose());
+  return mesh;
+}
 function group(...kids){ const g = new THREE.Group(); kids.forEach(k=>k && g.add(k)); return g; }
 function rotX(o, a){ o.rotation.x = a; return o; }
 function rotZ(o, a){ o.rotation.z = a; return o; }
@@ -114,19 +173,33 @@ export function lightMarker(x, y, z, color, intensity, distance, kind, shadow){
       return g;
     },
     fountain(){
-      const water = mat(0x3d7fb8, { emissive:0x113355, transparent:true, opacity:0.85 });
-      const g = group(cyl(1.4, 1.5, 0.6, M.stone(), 0, 0.3, 0, 24), cyl(1.25, 1.25, 0.05, water, 0, 0.55, 0, 24),
-        cyl(0.2, 0.3, 1.6, M.stone(), 0, 1.2, 0), cyl(0.7, 0.3, 0.3, M.stone(), 0, 2.05, 0, 20), cyl(0.6, 0.6, 0.04, water, 0, 2.18, 0, 20));
-      const spout = cone(0.12, 0.6, mat(0xa8d4ff, { emissive:0x3366aa, transparent:true, opacity:0.7 }), 0, 2.5, 0, 8);
-      g.add(spout); S.animated.push(t=>{ spout.scale.y = 1 + Math.sin(t*6)*0.15; });
+      // dark still water in the basins; a thin veil spilling over the upper tier
+      const water = mat(0x0e151b, { roughness: 0.04, metalness: 0.2 });
+      const g = group(cyl(1.4, 1.5, 0.6, M.stone(), 0, 0.3, 0, 32), cyl(1.25, 1.25, 0.05, water, 0, 0.55, 0, 32),
+        cyl(0.2, 0.3, 1.6, M.stone(), 0, 1.2, 0, 16), cyl(0.7, 0.3, 0.3, M.stone(), 0, 2.05, 0, 24), cyl(0.6, 0.6, 0.04, water, 0, 2.18, 0, 24),
+        torus(0.7, 0.05, M.stone(), 0, 2.2, 0), cyl(0.07, 0.1, 0.3, M.stone(), 0, 2.32, 0, 10));
+      g.children[5].rotation.x = Math.PI/2;
+      const streaks = canvasTexture(128, (c, w, h)=>{
+        const r = rng(5); c.clearRect(0, 0, w, h);
+        for(let i=0; i<70; i++){ const x = r()*w, a = 0.15 + r()*0.5; const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, `rgba(220,235,255,${a})`); gr.addColorStop(r(), `rgba(220,235,255,${a*0.3})`); gr.addColorStop(1, `rgba(220,235,255,${a})`); c.fillStyle = gr; c.fillRect(x, 0, 1 + r()*2, h); }
+      });
+      streaks.wrapS = streaks.wrapT = THREE.RepeatWrapping; streaks.repeat.set(4, 1);
+      const veilMat = new THREE.MeshStandardMaterial({ map: streaks, alphaMap: streaks, transparent: true, depthWrite: false, roughness: 0.1, color: 0xc8dcec, side: THREE.DoubleSide, opacity: 0.55 });
+      const veil = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.8, 1.62, 32, 1, true), veilMat);
+      veil.position.y = 1.38; g.add(veil);
+      const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.03, 0.32, 8, 1, true), veilMat);
+      jet.position.y = 2.6; g.add(jet);
+      S.animated.push(t=>{ streaks.offset.y = (t * 1.6) % 1; jet.scale.y = 1 + Math.sin(t*9)*0.08; });
       return g;
     },
     tree(){
-      const leaf = mat(0x2f5a2c), leaf2 = mat(0x3d6f35);
-      const g = group(cyl(0.32, 0.5, 3.2, mat(0x4a3220), 0, 1.6, 0, 10),
-        rotZ(cyl(0.12, 0.2, 1.6, mat(0x4a3220), 0.6, 2.8, 0, 8), -0.8), rotZ(cyl(0.12, 0.2, 1.6, mat(0x4a3220), -0.6, 3.0, 0.2, 8), 0.9),
-        sph(1.6, leaf, 0, 4.2, 0, 12, 10), sph(1.1, leaf2, 1.2, 3.8, 0.4, 10, 8), sph(1.2, leaf2, -1.1, 4.0, -0.3, 10, 8), sph(1.0, leaf, 0.2, 5.0, 0.6, 10, 8));
-      for(let i=0;i<5;i++) g.add(sph(0.12, mat(0xb03030), Math.cos(i*1.3)*1.4, 3.6+i*0.25, Math.sin(i*1.3)*1.2+0.4, 8, 6));
+      // a few fallen leaves at its foot, darkened by the rain
+      const g = group(gnarledTree(7));
+      const leafMat = mat(0x5a4426, { roughness: 0.7, side: THREE.DoubleSide }), lr = rng(17);
+      for(let i=0; i<40; i++){
+        const a = lr()*Math.PI*2, d = 0.5 + lr()*1.8, l = new THREE.Mesh(new THREE.CircleGeometry(0.06 + lr()*0.04, 5), leafMat);
+        l.rotation.set(-Math.PI/2 + (lr()-0.5)*0.3, 0, lr()*6); l.position.set(Math.cos(a)*d, 0.012, Math.sin(a)*d); g.add(l);
+      }
       return g;
     },
     well(){
@@ -230,7 +303,10 @@ export function lightMarker(x, y, z, color, intensity, distance, kind, shadow){
           g.add(group(cyl(0.06, 0.03, 0.12, M.gold(), x+0.25, 1.0, z, 8), cyl(0.015, 0.015, 0.1, M.gold(), x+0.25, 0.97, z, 6), cyl(0.07, 0.07, 0.01, M.gold(), x+0.25, 0.925, z, 8)));
         }
       }
-      g.add(sph(0.3, mat(0xc87a2a), 0, 1.1, 0), sph(0.2, mat(0xb03030), -1.5, 1.05, 0), sph(0.2, mat(0x6aa040), 1.5, 1.05, 0));
+      // a crusty loaf on a board, a wheel of cheese, a pewter platter
+      const loaf = sph(0.22, mat(0x7a4a24, { roughness: 0.9 }), 0, 1.02, 0, 16, 10); loaf.scale.set(1.5, 0.62, 0.95);
+      g.add(box(0.7, 0.04, 0.4, M.darkwood(), 0, 0.94, 0), loaf);
+      g.add(cyl(0.2, 0.2, 0.13, mat(0xc9a256, { roughness: 0.75 }), -1.5, 0.99, 0, 20), cyl(0.26, 0.24, 0.03, mat(0x8c8c88, { metalness: 0.8, roughness: 0.45 }), 1.5, 0.94, 0, 24));
       return g;
     },
     fireplace(){
@@ -372,7 +448,8 @@ export function lightMarker(x, y, z, color, intensity, distance, kind, shadow){
       return g;
     },
     cauldron(){
-      const brew = M.glow(0x3aff6a);
+      // a murky brew with a faint glow, not a neon one
+      const brew = mat(0x23402a, { emissive: 0x2e8a44, emissiveIntensity: 0.55, roughness: 0.15 });
       const pot = new THREE.Mesh(new THREE.SphereGeometry(0.85, 20, 14, 0, Math.PI*2, Math.PI*0.25, Math.PI*0.75), mat(0x1c1c20, { side: THREE.DoubleSide }));
       pot.position.y = 0.95;
       const g = group(pot, torus(0.62, 0.07, mat(0x2a2a30), 0, 1.55, 0), cyl(0.6, 0.6, 0.05, brew, 0, 1.45, 0, 20));
@@ -383,9 +460,9 @@ export function lightMarker(x, y, z, color, intensity, distance, kind, shadow){
         const ph = Math.random()*3; g.add(b);
         S.animated.push(t=>{ const k = ((t*0.8+ph)%1.6)/1.6; b.position.y = 1.47 + k*0.9; b.scale.setScalar(1-k); });
       }
-      const glow = glowSprite('rgba(80,255,130,1)', 3); glow.position.y = 1.8; g.add(glow);
+      const glow = glowSprite('rgba(130,220,150,0.45)', 1.6); glow.position.y = 1.65; g.add(glow);
       const fire = flame(2.2); fire.position.y = 0.0; g.add(fire);
-      g.add(lightMarker(0, 2.0, 0, 0x4dff7a, 22, 9, 'magic'));
+      g.add(lightMarker(0, 2.0, 0, 0x8ad49a, 9, 7, 'magic'));
       return g;
     },
     barrels(){
@@ -498,16 +575,18 @@ export function lightMarker(x, y, z, color, intensity, distance, kind, shadow){
     },
     orrery(){
       const g = group(cyl(0.5, 0.7, 0.2, M.darkwood(), 0, 0.1, 0, 14), cyl(0.06, 0.08, 1.6, M.gold(), 0, 0.9, 0, 8));
-      const sun = sph(0.35, M.glow(0xffc040, 1.2), 0, 1.9, 0); g.add(sun);
-      const sunGlow = glowSprite('rgba(255,200,80,0.6)', 1.6); sunGlow.position.y = 1.9; g.add(sunGlow);
-      [[0.8, 0.09, 0x9a9aa0, 1.4],[1.2, 0.13, 0xd0a060, 0.9],[1.6, 0.14, 0x3a7ad0, 0.6],[2.0, 0.11, 0xc0503a, 0.4]].forEach(([rad, size, col, speed])=>{
-        const arm = group(box(rad, 0.02, 0.02, M.gold(), rad/2, 0, 0), sph(size, mat(col, { emissive: col, emissiveIntensity:0.25 }), rad, 0, 0));
+      // a polished brass sun, not a lamp
+      const sun = sph(0.3, mat(0xd8a84a, { metalness: 1, roughness: 0.25, emissive: 0x6a4410, emissiveIntensity: 0.3 }), 0, 1.9, 0); g.add(sun);
+      // planets of silver, copper, lapis and jasper, as an instrument maker would make them
+      [[0.8, 0.09, mat(0xb4b4b8, { metalness: 1, roughness: 0.3 }), 1.4],[1.2, 0.13, mat(0xb87333, { metalness: 1, roughness: 0.35 }), 0.9],
+       [1.6, 0.14, mat(0x2c4677, { roughness: 0.25 }), 0.6],[2.0, 0.11, mat(0x7a3a2c, { roughness: 0.3 }), 0.4]].forEach(([rad, size, pm, speed])=>{
+        const arm = group(box(rad, 0.02, 0.02, M.gold(), rad/2, 0, 0), sph(size, pm, rad, 0, 0));
         arm.position.y = 1.9; arm.rotation.y = Math.random()*6; g.add(arm); spin(arm, speed);
       });
       return g;
     },
     crystal(){
-      const ball = sph(0.32, mat(0xb8a0ff, { emissive:0x5a3aa8, transparent:true, opacity:0.75 }), 0, 1.45, 0, 20, 16);
+      const ball = sph(0.32, mat(0xcfd8e4, { emissive:0x2a3550, emissiveIntensity:0.5, roughness:0.04, transparent:true, opacity:0.55 }), 0, 1.45, 0, 24, 18);
       const g = group(cyl(0.3, 0.45, 0.25, M.darkwood(), 0, 0.12, 0, 10), cyl(0.08, 0.12, 0.85, mat(0x3a2a4a), 0, 0.65, 0, 8),
         cyl(0.25, 0.15, 0.12, M.gold(), 0, 1.12, 0, 10), ball);
       const swirl = sph(0.18, M.glow(0xffffff), 0, 1.45, 0, 8, 6); swirl.material = new THREE.MeshBasicMaterial({ color:0xe8deff, transparent:true, opacity:0.5 });

@@ -3,6 +3,8 @@ import { S } from './state.js';
 import { initRenderer, initLighting, initComposer, applyQuality, usesComposer, updateLights, resizeComposer } from './lights.js';
 import { buildArchitecture } from './architecture.js';
 import { buildDecor } from './decor.js';
+import { buildDoors, doorStates } from './doors.js';
+import { updateCulling, cullStats } from './cull.js';
 import { buildHero, animateHero } from './hero.js';
 import { movePlayer, updateCamera, wireInput, blocked, placeAt } from './player.js';
 import * as UI from './ui.js';
@@ -13,7 +15,7 @@ import { buildAtmosphere, startAudio, updateAudio, footstep, setMuted, isMuted, 
 /* The Keep of Mnemosyne: 3D engine entry point. Registers window.castleEngine,
    which the app (index.html) calls through enterCastle(). */
 const $ = id => document.getElementById(id);
-const QUALITY_KEY = 'mnemosyne:castleQuality', SOUND_KEY = 'mnemosyne:castleSound';
+const QUALITY_KEY = 'mnemosyne:castleQuality', SOUND_KEY = 'mnemosyne:castleSound', HINT_KEY = 'mnemosyne:castleHintSeen';
 const FOG = {
   courtyard: [0x0d1222, 0.012], entrance: [0x120e0a, 0.012], hall: [0x140d08, 0.010], gallery: [0x120e0a, 0.014],
   library: [0x120d08, 0.012], dungeon: [0x06140b, 0.034], armoury: [0x160a05, 0.016], tower: [0x0a0f22, 0.008]
@@ -34,6 +36,7 @@ function build() {
   initLighting();
   buildArchitecture();
   buildDecor();
+  buildDoors();
   UI.buildStations();
   buildHero();
   buildAtmosphere();
@@ -84,6 +87,16 @@ function autoTune(dt) {
   }
 }
 
+// station markers and the keeper manage their own visibility (and move between rooms)
+let noCullSet = null;
+function noCull() {
+  if (!noCullSet) {
+    noCullSet = new Set();
+    for (const sv of S.stationViews) for (const k of ['ring', 'badge', 'card', 'orb']) noCullSet.add(sv[k]);
+  }
+  return noCullSet;
+}
+
 function frame() {
   if (!S.running) return;
   raf = requestAnimationFrame(frame);
@@ -94,6 +107,7 @@ function frame() {
   // slow devices get several small movement steps per frame rather than slow walking
   for (let left = dt; left > 1e-4; left -= 0.05) movePlayer(Math.min(0.05, left));
   S.currentRoom = castleRoomAt(S.player.x, S.player.z) || S.currentRoom;
+  updateCulling(t, noCull());
   UI.updateNearby();
   animateHero(sdt, t);
   updateCamera(dt);
@@ -130,6 +144,10 @@ function enter(id, startMode) {
     if (UI.isMapBig()) UI.toggleMap();
     UI.teleportStart(); UI.closePanel(); UI.refreshAllStations(); resize();
     if (startMode === 'recall') UI.startRecall();
+    else if (!store(HINT_KEY)) {
+      store(HINT_KEY, '1');
+      setTimeout(() => toast('Walk towards the castle: the doors open as you reach them. The iron gate behind you is station 1. Press M for the map.'), 600);
+    }
     S.running = true; S.clock.update(); cancelAnimationFrame(raf); frame();
     S.renderer.domElement.focus();
     updateChromeLabels();
@@ -180,7 +198,7 @@ window.castleEngine = {
       drawCalls: S.renderer ? S.renderer.info.render.calls : 0, triangles: S.renderer ? S.renderer.info.render.triangles : 0,
       lights: S.lightSources.length, merged: S.mergeInfo, assets: Object.assign({}, assetStatus())
     }),
-    teleportTo: UI.teleportTo, interact: UI.interact, keys: S.keys, blocked, cam: S.cam,
+    teleportTo: UI.teleportTo, interact: UI.interact, keys: S.keys, blocked, cam: S.cam, doors: doorStates, culling: cullStats,
     placeAt: (x, z, yaw) => { placeAt(x, z, yaw); UI.updateNearby(); },
     scene: () => S.scene,
     setQuality: q => { applyQuality(q); resize(); autoQuality = false; updateChromeLabels(); }

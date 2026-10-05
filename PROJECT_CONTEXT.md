@@ -12,14 +12,14 @@ Mnemosyne teaches memory technique (curriculum mostly grounded in Kevin Horsley'
 - **Persistence**: `storageGet`/`storageSet` prefer `window.storage` (the Claude Artifacts runtime API) when present, and fall back to `localStorage` (prefixed `mnemosyne:`) otherwise — resolved, see "Persistence: resolved" below. The app is self-contained wherever it's opened.
 - **Dependencies**: Three.js r186 from npm (bundled), and `pdf.js` still loaded from cdnjs for PDF text extraction. Real CC0 assets from Poly Haven live in `public/assets` (about 22 MB, optimised by `scripts/fetch-assets.mjs`: WebP textures, meshopt GLB, simplified meshes) and stream in at runtime over the procedural stand-ins (`src/castle/assets.js`). A-Frame was tried for 360° photo viewing and deliberately removed (see "Reversed decisions" below).
 - **One live external API call**: the Library's "Suggest images (AI)" feature calls `https://api.anthropic.com/v1/messages` (model `claude-sonnet-4-6`) directly from the browser, no API key in the code. This works because the Claude Artifacts runtime injects auth for that specific endpoint. **Also won't work outside that runtime** without the developer supplying their own key/proxy.
-- **3D/media catalog** (`PALACE_CATALOG` in the code): a hand-picked list of *real, individually verified* Sketchfab and YouTube embed IDs. There is no generic "pull any palace" API — that was evaluated and doesn't exist. Every entry was checked by hand; nothing is guessed.
+- **3D/media catalog (parked)**: the hand-picked Sketchfab/YouTube catalog (`PALACE_CATALOG`) and its "Explore in 3D" view were removed from the app once the castle replaced them. The code, its tests and restore steps are in `archive/3d-explore/`.
 
 ## Data model
 
 Everything lives under one `DB` object, each top-level key persisted to its own storage key:
 
 - **`DB.palaces`**: `[{ id, name, description, loci: [{ id, title, content: {text, source} | null, image: dataURL | null }], createdAt, srs: {ef, interval, reps, dueAt, lastAt}, basedOn: {catalogId, name, place} | undefined }]`
-  `srs` is SM-2 spaced-repetition state, written after a recall walk. `basedOn` links a palace to a `PALACE_CATALOG` entry if it was created via "Build a palace here."
+  `srs` is SM-2 spaced-repetition state, written after a recall walk. `basedOn` (legacy) linked a palace to the parked 3D Explore catalog; the app now ignores it.
   Castle palaces add `kind: 'castle'`, and each locus carries `anchor: 's01'..'s40'` tying it to a fixed station in `CASTLE_STATIONS`. `ensureCastleLoci` runs on load to keep a castle at exactly 40 loci in route order (content preserved), so stations can't be added, removed or reordered.
 - **`DB.decks`**: `[{ id, title, sourceName, items: [{ id, text, marked: bool, suggestions: [string,string,string] | undefined }], createdAt, srs }]` — decks come from PDF extraction or manual entry; `marked` is the "want to learn this" flag; `suggestions` are AI-generated SEE-principle image ideas.
 - **`DB.history`**: append-only log, capped at 500, `{ id, ts, type: 'drill' | 'palace-walk' | 'deck-recall', ...}`.
@@ -40,8 +40,11 @@ Everything lives under one `DB` object, each top-level key persisted to its own 
     - leaded and stained-glass windows with light shafts
     - a pooled-light system (8 real point lights follow the player to the nearest of ~36 torches, chandeliers and fires) plus a moonlight shadow caster
     - High/Medium/Low quality (GTAO + bloom + shadows on High), auto-downgraded on slow devices
-    - static geometry merged by material (~150–700 draw calls)
-    - a hooded, lantern-carrying keeper (third person, over-the-shoulder camera)
+    - static geometry merged by material, and room culling (`cull.js`): only the room you're in and the rooms through its doorways are drawn. That's about 170–290 draw calls at Low.
+    - a hooded, lantern-carrying keeper in a draped linen cloak (third person, over-the-shoulder camera)
+    - oak double doors in all 8 archways (`doors.js`) that swing open away from you as you approach and close behind you; no key press needed
+    - realism pass: stations are marked by engraved brass floor medallions instead of glowing rings. A thin inlay lights only for the nearby/target station; numbers and memory cards fade in with distance.
+    - also in that pass: world-space weathering on every wall/floor material (`materials.js`: tiling breakup, roughness variation, grime rising from the floor), stone base courses and cornices, and a multisampled post-processing target with a filmic grade (vignette, grain). The courtyard got real street and wall lamps, ferns, a hedge, lit upper windows and a procedural gnarled oak with a bark scan.
     - rain, dust, embers and mist particles; WebAudio-synthesised ambience (rain, wind, fire, drips, clock, forge) and footsteps that sound different on stone and wood
   - **Interaction:** E-to-interact memory panel (text + picture), a parchment map, and a recall walk that restarts at the gate and is forward-only through filled stations. It reuses `finishWalk()`, so history and SM-2 are identical to the 2D walk. Library "Send to palace" fills empty castle stations in route order.
   - **Fallback:** if WebGL or the module fails, the app shows a fallback that opens the 2D station list.
@@ -49,7 +52,7 @@ Everything lives under one `DB` object, each top-level key persisted to its own 
 - **Palaces**: build named palaces, add/reorder/delete stations, each station holds text + optional photo (client-side compressed to ~15-40KB JPEG before storage). Walk (study) is now **editable in place** — typing a title/content while walking saves immediately, and a "+ New station here" button lets you keep creating new stations as you move through a space, inserting right after your current position. Walk (recall) is strictly forward-only (no backtracking), self-marked, and feeds the SM-2 scheduler.
 - **Library**: upload a PDF (or type manually), auto-chunked into items (sentence/line/paragraph), each item can get 3 AI-generated SEE-style image suggestions, can be starred "marked to learn," and a cross-deck "Marked to learn" panel aggregates every starred item across every deck with a combined practice session and a combined "Send to palace" action. Per-deck "Send to palace" also has a "only marked items" filter.
 - **Drills**: 5 Memory-League-style disciplines (Numbers, Words, Images, Cards, Names & Faces), memorize-then-recall, 10 difficulty levels each, gated behind relevant curriculum lessons (with an "I already know this" override).
-- **3D Explore**: the verified catalog, filterable by India/International, each entry tagged by embed kind (3D model / 360° photo / 360° video) and honestly labeled by source quality. "Build a palace here" creates a real, empty palace linked back to that catalog entry; revisiting offers to reopen it rather than duplicate.
+- **3D Explore (parked)**: removed from the app; see `archive/3d-explore/README.md`. Lesson 2.2's Try-it now opens the castle for an empty walk instead.
 - **Number Systems**: Major System (100 defaults, independently authored — not copied from any published table — fully overridable) and PAO (100% empty by default, three fields per number, live preview), sharing one screen with a remembered-preference tab toggle.
 - **History**: full session log.
 
@@ -61,16 +64,18 @@ The one thing this does *not* solve: the AI "Suggest images" feature's direct ca
 
 ## Testing
 
-13 jsdom files in `tests/` (`smoke_test*.js`; the original `smoke_test.js` was superseded by `smoke_test2.js` and isn't in the repo). They read `index.html` directly; the castle's ES module doesn't run under jsdom, which exercises the castle fallback path. Each is self-contained: spins up `jsdom`, loads `mnemosyne.html` with `runScripts:'dangerously'`, stubs `pdfjsLib`, and runs hand-rolled `check(label, condition)` assertions — no test framework dependency. Run with `node tests/smoke_test_X.js`. 271 checks total, all passing. `smoke_test_castle.js` covers the castle's data layer and no-WebGL fallback.
+12 jsdom files in `tests/` (`smoke_test*.js`; the original `smoke_test.js` was superseded by `smoke_test2.js` and isn't in the repo). They read `index.html` directly; the castle's ES module doesn't run under jsdom, which exercises the castle fallback path. Each is self-contained: spins up `jsdom`, loads `mnemosyne.html` with `runScripts:'dangerously'`, stubs `pdfjsLib`, and runs hand-rolled `check(label, condition)` assertions — no test framework dependency. Run with `node tests/smoke_test_X.js`. 271 checks total, all passing. `smoke_test_castle.js` covers the castle's data layer and no-WebGL fallback.
 
 The castle also has a **real-browser test**, `tests/browser/castle.browser.js` (Playwright + headless Chromium with SwiftShader WebGL, run against the Vite production build with `npm run test:browser`). It checks 39 things, including the draw-call budget and the Graphics/Sound controls: WebGL draw calls, walking and collisions, a flood fill proving all 40 station circles are reachable on foot, saving memories, the map, a full recall walk logged to history/SM-2, Library → castle placement, and phone viewport. It needs no network; the build bundles everything the castle uses.
 
-**Important caveat for whoever picks this up**: jsdom has no real WebGL/canvas and doesn't execute cross-origin iframe content, so the Sketchfab/YouTube embeds are only ever verified *structurally* (correct URL, correct attributes, correct DOM wiring) — never confirmed to actually render. That gap is exactly how the Mysore Palace embed bug shipped undetected (see below). Playwright now covers the castle; the third-party embeds in 3D Explore are still only structurally verified.
+**Caveat if 3D Explore is ever restored**: jsdom has no real WebGL and doesn't run cross-origin iframes, so the Sketchfab/YouTube embeds were only ever verified *structurally*, never confirmed to render. That gap is how the Mysore Palace embed bug shipped.
 
 ## Known issues / open items
 
-- **Mysore Palace's Sketchfab embed doesn't render** for real users, confirmed by direct report. Root cause unconfirmed — Sketchfab is a JS-rendered SPA the fetch tool can't inspect, and jsdom can't execute it either. Mitigated: that entry no longer attempts to embed, shows a direct "Open on Sketchfab" link instead. A general fallback link was also added under every embed as a permanent escape hatch, not just for this entry.
-- No verified 3D/360 source was found for Jaipur's City Palace or Amber Fort beyond two YouTube videos whose spherical metadata is unverified (titled as 360°/VR, not independently confirmed to render as drag-to-look).
+- **Fixed:** every doorway arch used to render as a solid stone slab. Its hole touched the outer outline, so triangulation dropped it. The arch is now a single outline, open at the bottom; don't reintroduce holes that touch an outer edge.
+- **Fixed:** chandeliers were placed at floor level (`add()` overrode their height). Their chains stood up from the floor and their lights sat below it, which is why rooms like the library looked too dark.
+- Still procedural and the next candidates for real models or more detail: the keeper figure, the staircase, cauldron, harp, globe, telescope, cages and portraits. Poly Haven is the only CC0 source reachable from the build sandbox; its realistic trees are 1.7–7.8M polygons, too heavy for the web.
+
 - WebXR (real headset immersion) is unreliable inside Claude's chat iframe — nested-iframe permission policy likely blocks it. It may work better if `mnemosyne.html` is opened as a standalone file outside claude.ai, but this hasn't been tested in a real browser.
 - `window.storage` / `localStorage` fallback is resolved (see above). The direct Anthropic API fetch for AI image suggestions is still Claude-Artifacts-specific and unresolved.
 

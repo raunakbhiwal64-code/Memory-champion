@@ -65,6 +65,14 @@ function lampPost() {
   g.add(lightMarker(0, 3.3, 0, 0xffc070, 30, 12, 'lantern', true));
   return g;
 }
+// wrought-iron wall bracket with a lantern; +z points out of the wall
+function wallLamp() {
+  const g = new THREE.Group();
+  g.add(box(0.16, 0.36, 0.05, M.iron(), 0, 0.6, 0.025), box(0.05, 0.05, 0.62, M.iron(), 0, 0.72, 0.33));
+  g.add(box(0.22, 0.3, 0.22, mat(0x403020, { emissive: 0xffa850, emissiveIntensity: 1.1, roughness: 0.3 }), 0, 0.42, 0.62));
+  g.add(lightMarker(0, 0.3, 0.75, 0xffb868, 9, 8, 'lantern'));
+  return g;
+}
 function bench(len) {
   const g = new THREE.Group();
   g.add(box(len, 0.08, 0.38, M.darkwood(), 0, 0.46, 0));
@@ -109,16 +117,32 @@ function hang(roomId, obj) { registerLights(obj, roomId); return obj; }
 
 export function buildDecor() {
   /* Moonlit Courtyard: lamp posts, ivy, crates, a cart */
-  [[30, 45.6], [38, 45.6], [26, 57.6], [41.5, 58]].forEach(([x, z]) => { hang('courtyard', add(lampPost(), x, 0, z)); S.colliders.push({ x, z, r: 0.25 }); });
-  const ivyMat = mat(0x24401f, { roughness: 0.85, side: THREE.DoubleSide });
-  const r = rng(12), leaves = 900, ivy = new THREE.InstancedMesh(new THREE.CircleGeometry(0.14, 5), ivyMat, leaves), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler();
+  [[30, 45.6], [38, 45.6], [26, 57.6], [41.5, 58]].forEach(([x, z]) => {
+    // kept apart from the static merge so the real lamp model can replace it
+    const lamp = hang('courtyard', add(lampPost(), x, 0, z)); lamp.userData.noMerge = true; S.colliders.push({ x, z, r: 0.25 });
+    (S.replaceables.lamppost = S.replaceables.lamppost || []).push({ group: lamp, bottom: 0 });
+  });
+  // lanterns flanking the great door, and one on each side wall
+  for (const [side, along] of [['n', 30.3], ['n', 37.7], ['e', 50.5], ['w', 52]]) {
+    const lamp = hang('courtyard', onWall('courtyard', side, along, 2.6, wallLamp(), 0.02)); lamp.userData.noMerge = true;
+    (S.replaceables.walllamp = S.replaceables.walllamp || []).push({ group: lamp, bottom: 2.2 });
+  }
+  // ivy: thousands of small pointed leaves, darker and denser near the root,
+  // each a slightly different green
+  const leafShape = new THREE.Shape();
+  leafShape.moveTo(0, -0.05); leafShape.quadraticCurveTo(0.075, -0.02, 0.06, 0.03); leafShape.lineTo(0.02, 0.025); leafShape.lineTo(0, 0.075);
+  leafShape.lineTo(-0.02, 0.025); leafShape.lineTo(-0.06, 0.03); leafShape.quadraticCurveTo(-0.075, -0.02, 0, -0.05);
+  const ivyMat = mat(0xffffff, { roughness: 0.55, side: THREE.DoubleSide });
+  const r = rng(12), leaves = 3200, ivy = new THREE.InstancedMesh(new THREE.ShapeGeometry(leafShape, 3), ivyMat, leaves), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), e = new THREE.Euler(), col = new THREE.Color();
   const patches = [[24.05, 47, 'w'], [24.05, 55, 'w'], [29, 59.95, 's'], [43.95, 56, 'e']];
   for (let i = 0; i < leaves; i++) {
-    const [a, b, side] = patches[i % patches.length], spread = 2.6, up = Math.pow(r(), 0.7) * 5.5;
-    const off = (r() - 0.5) * spread * (1.2 - up / 6);
-    const x = side === 's' ? a + off : a + (side === 'w' ? 0.02 : -0.02) * (1 + r()), z = side === 's' ? b - 0.02 * (1 + r()) : b + off;
-    e.set((r() - 0.5) * 0.8, side === 's' ? 0 : Math.PI / 2, r() * 6); q.setFromEuler(e);
-    const sc = 0.6 + r() * 0.9; m4.compose(new THREE.Vector3(x, 0.2 + up, z), q, new THREE.Vector3(sc, sc, sc)); ivy.setMatrixAt(i, m4);
+    const [a, b, side] = patches[i % patches.length], up = Math.pow(r(), 0.85) * 5.8;
+    const spread = 1.2 + 2.4 * Math.sqrt(up / 5.8) * (1.15 - up / 7);
+    const off = (r() - 0.5) * spread + Math.sin(up * 1.7 + a) * 0.35;
+    const x = side === 's' ? a + off : a + (side === 'w' ? 0.03 : -0.03) * (1 + r() * 2), z = side === 's' ? b - 0.03 * (1 + r() * 2) : b + off;
+    e.set((r() - 0.5) * 0.9, (side === 's' ? 0 : Math.PI / 2) + (r() - 0.5) * 0.6, (r() - 0.5) * 1.2); q.setFromEuler(e);
+    const sc = 0.8 + r() * 0.9; m4.compose(new THREE.Vector3(x, 0.15 + up, z), q, new THREE.Vector3(sc, sc, sc)); ivy.setMatrixAt(i, m4);
+    col.setHSL(0.27 + r() * 0.06, 0.35 + r() * 0.2, 0.09 + r() * 0.08 + (up < 1 ? -0.03 : 0)); ivy.setColorAt(i, col);
   }
   ivy.receiveShadow = true; S.scene.add(ivy);
   for (const [x, z] of [[42.6, 45.4], [42.6, 46.6], [41.5, 45.4]]) { const c = add(box(1, 1, 1, M.wood(), x, 0.5, z)); c.userData.noMerge = true; (S.replaceables.crate = S.replaceables.crate || []).push({ group: c, bottom: 0 }); S.colliders.push({ x, z, r: 0.6 }); }
@@ -126,13 +150,13 @@ export function buildDecor() {
   /* Entrance Hall: columns, runner, great chandelier, crest banners, sconces */
   for (const x of [28, 40]) for (const z of [33, 39]) { add(column(R('entrance').h - 0.2, 0.42), x, 0, z); S.colliders.push({ x, z, r: 0.6 }); }
   add(box(3.2, 0.02, 11, mat(0x7a1a22, { roughness: 0.95 }), 34, 0.012, 36.5));
-  hang('entrance', add(chandelier(1.6, 14, 6.2, 10), 34, 0, 35.5));
+  hang('entrance', add(chandelier(1.6, 14, 6.2, 10), 34, 6.2, 35.5));
   onWall('entrance', 'w', 31, 5.6, crestBanner(1), 0.08); onWall('entrance', 'e', 35, 5.2, crestBanner(2), 0.08);
   hang('entrance', onWall('entrance', 'n', 28, 3.2, sconce())); hang('entrance', onWall('entrance', 'n', 40, 3.2, sconce()));
 
   /* Great Hall: two more long tables, benches, three chandeliers, banners, dais */
   [[7, 30], [18, 28.5]].forEach(([x, z]) => { const t = PROPS.longtable(); add(t, x, 0, z, Math.PI / 2); for (const dz of [-2.6, 0, 2.6]) S.colliders.push({ x, z: z + dz, r: 1.3 }); });
-  for (const z of [22, 29, 36]) hang('hall', add(chandelier(1.3, 12, 7.2, 11), 12, 0, z));
+  for (const z of [22, 29, 36]) hang('hall', add(chandelier(1.3, 12, 7.2, 11), 12, 7.2, z));
   onWall('hall', 'e', 21, 5.5, crestBanner(3), 0.08); onWall('hall', 'e', 31, 5.5, crestBanner(4), 0.08); onWall('hall', 'w', 35, 5.5, crestBanner(5), 0.08);
   add(box(14, 0.12, 4.4, M.stone(), 12, 0.06, 18.4));
   add(box(14.2, 0.02, 4.6, mat(0x5a1018, { roughness: 0.95 }), 12, 0.13, 18.4));
@@ -152,7 +176,7 @@ export function buildDecor() {
     onWall('gallery', side, x, 2.7, p, 0.08);
   });
   hang('gallery', onWall('gallery', 's', 15.5, 3.4, sconce()));
-  hang('gallery', add(chandelier(0.9, 8, 4.0, 6), 12, 0, 8));
+  hang('gallery', add(chandelier(0.9, 8, 4.0, 6), 12, 4.0, 8));
   for (const x of [6, 19]) { add(bench(1.6), x, 0, 10.6); S.colliders.push({ x, z: 10.6, r: 0.7 }); }
 
   /* Library: two-storey stacks, a balcony walkway with railings, lamps, ladder */
@@ -174,7 +198,7 @@ export function buildDecor() {
   for (const [x, z] of [[lx0 + 1.8, lz0 + 1.8], [lx1 - 1.8, lz0 + 1.8], [lx0 + 1.8, 12], [lx1 - 1.8, 12]]) { add(box(0.3, bal, 0.3, rail, x, bal / 2, z)); S.colliders.push({ x, z, r: 0.3 }); }
   const ladder = new THREE.Group(); for (const sx of [-0.25, 0.25]) ladder.add(box(0.06, 5.2, 0.06, M.wood(), sx, 2.6, 0)); for (let k = 0; k < 12; k++) ladder.add(box(0.5, 0.04, 0.04, M.wood(), 0, 0.3 + k * 0.42, 0));
   ladder.rotation.x = -0.18; add(ladder, 33, 0, 4.3); S.colliders.push({ x: 33, z: 4.1, r: 0.35 });
-  hang('library', add(chandelier(1.4, 12, 7.6, 10), 34, 0, 14));
+  hang('library', add(chandelier(1.4, 12, 7.6, 10), 34, 7.6, 14));
   [[30, 18.6], [38.5, 12]].forEach(([x, z], i) => { const t = new THREE.Group(); t.add(box(1.4, 0.08, 0.8, M.wood(), 0, 0.82, 0)); for (const sx of [-0.6, 0.6]) for (const sz of [-0.3, 0.3]) t.add(box(0.07, 0.8, 0.07, M.darkwood(), sx, 0.4, sz)); if (i) { add(t, x, 0, z); S.colliders.push({ x, z, r: 0.8 }); const l = bankerLamp(); hang('library', add(l, x + 0.4, 0.86, z)); } });
 
   /* Alchemist's Cellar: hanging herbs, candles, shelves, chains, green haze */
