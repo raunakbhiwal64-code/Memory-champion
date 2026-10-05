@@ -83,6 +83,16 @@ The castle also has a **real-browser test**, `tests/browser/castle.browser.js` (
 
 - **A-Frame + Wikimedia 360° photos was built, then removed.** It worked in principle (verified CORS support, verified licensing on one Taj Mahal photo) but needed a 150KB+ library, custom scene markup, and error-fallback handling, for content that was genuinely hard to source — only one clean example was ever found after real effort. YouTube 360° embedding covers the same need with a plain iframe and much easier sourcing. If 360° photo viewing comes up again, know that the harder path was already tried.
 
+## The native app (Godot)
+
+The app is being rebuilt as a native Godot 4.7 project in `godot/` (see `godot/README.md`). It is a full port: Dashboard, Learn, Palaces, Library, Drills, Number systems, History and Backup, plus the 3D castle with real lights and global illumination.
+
+- **Shared content:** the curriculum, drills, word lists and castle layout come from the web app's `index.html` through `npm run godot-data` into `godot/data/content.json`. The castle models and textures come through `npm run godot-assets`. Change the content in `index.html` and re-export, so both versions teach the same.
+- **Data safety:** each save goes through a temporary file. The first save each day keeps a snapshot of the day before, and replacing data keeps a copy first. Export and import use one JSON backup that both versions read.
+- **Reviews:** these are scheduled per memory with FSRS-5 and graded on four levels. Old SM-2 palace schedules are migrated when imported.
+- **Not ported yet:** PDF import (text and .txt files only) and AI image suggestions.
+- **CI:** `.github/workflows/godot.yml` runs the Godot tests and exports Linux, Windows, Web and Android builds.
+
 ## Next steps
 
 - **Done:** CC0 assets swapped in. That's 13 texture sets and 38 models, streamed in with the nearest room first; see `public/assets/CREDITS.md`.
