@@ -62,3 +62,51 @@ func header(eyebrow: String, title: String, desc: String = "", actions: Array = 
 	# actions sit to the right on a wide screen and wrap below the title on a phone
 	left.custom_minimum_size.x = 260
 	content.add_child(UI.flow([left, UI.flow(actions, 10)] if not actions.is_empty() else [left], 16))
+
+
+## A nudge to read the relevant lesson, shown until it's marked learned.
+func tip(lesson_id: String, text: String) -> void:
+	if DB.is_lesson_done(lesson_id):
+		return
+	var l = Content.find_lesson(lesson_id)
+	if l == null:
+		return
+	var t := UI.label(text, "Dim", true)
+	t.custom_minimum_size.x = 260
+	content.add_child(UI.panel([UI.flow([t, UI.button("Read: " + l.title, "ButtonGold", func(): App.go("learn", { lesson = lesson_id }), true)], 14)], "CardGold"))
+
+
+func back_button(label: String, view: String) -> Button:
+	var b := UI.button("← " + label, "ButtonGhost", func(): App.go(view), true)
+	b.size_flags_horizontal = SIZE_SHRINK_BEGIN
+	return b
+
+
+## Opens a picker for an image file and returns it as a compressed data URL.
+func pick_image(on_picked: Callable) -> void:
+	var fd := FileDialog.new()
+	fd.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	fd.access = FileDialog.ACCESS_FILESYSTEM
+	fd.title = "Choose a picture"
+	fd.use_native_dialog = true
+	fd.filters = PackedStringArray(["*.jpg, *.jpeg, *.png, *.webp ; Pictures"])
+	fd.size = Vector2i(820, 560)
+	add_child(fd)
+	fd.canceled.connect(fd.queue_free)
+	fd.file_selected.connect(func(path):
+		fd.queue_free()
+		var img := Util.load_image_file(path)
+		if img == null:
+			App.toast("Could not use that picture")
+			return
+		on_picked.call(Util.data_url_from_image(img)))
+	fd.popup_centered()
+
+
+## A card that opens something when tapped anywhere on it.
+func clickable(p: Control, on_click: Callable) -> Control:
+	p.mouse_default_cursor_shape = CURSOR_POINTING_HAND
+	p.gui_input.connect(func(ev):
+		if ev is InputEventMouseButton and ev.button_index == MOUSE_BUTTON_LEFT and ev.pressed:
+			on_click.call())
+	return p
