@@ -32,6 +32,8 @@ var modal_panel: PanelContainer
 var modal_scroll: ScrollContainer
 var header: PanelContainer
 var overlay_host: Control  ## full-screen experiences (the 3D castle) go here
+var castle: Node3D = null
+var _chrome: Array = []  ## the background and app layout, hidden while the castle is open
 
 
 func _ready() -> void:
@@ -47,6 +49,7 @@ func _ready() -> void:
 	root.set_anchors_preset(PRESET_FULL_RECT)
 	root.add_theme_constant_override("separation", 0)
 	add_child(root)
+	_chrome = [bg, root]
 
 	header = PanelContainer.new()
 	header.theme_type_variation = "Header"
@@ -142,6 +145,33 @@ func go(name: String, args: Dictionary = {}) -> void:
 	var tab: String = PARENT_TAB.get(name, name)
 	for k in tab_buttons:
 		tab_buttons[k].button_pressed = k == tab
+
+
+# ---------- the 3D castle ----------
+
+## Opens the castle full screen. mode: study | recall | due
+func open_castle(palace_id: String, mode: String = "study") -> void:
+	if castle:
+		return
+	close_modal()
+	var c = load("res://scenes/castle.tscn").instantiate()
+	c.setup(palace_id, mode)
+	castle = c
+	for n in _chrome:
+		n.visible = false
+	overlay_host.add_child(c)
+
+
+func close_castle() -> void:
+	if castle == null:
+		return
+	close_modal()
+	var c := castle
+	castle = null
+	c.queue_free()
+	for n in _chrome:
+		n.visible = true
+	refresh_current()
 
 
 func refresh_current() -> void:

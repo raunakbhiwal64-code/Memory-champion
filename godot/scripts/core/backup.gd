@@ -156,6 +156,10 @@ static func normalize(raw: Dictionary, schema: int = SCHEMA) -> Dictionary:
 	var settings := _dict(raw.get("settings"))
 	if settings.get("retention") is float:
 		out.settings.retention = clampf(settings.retention, 0.7, 0.97)
+	if settings.get("castleQuality") in ["low", "medium", "high"]:
+		out.settings.castleQuality = settings.castleQuality
+	if settings.get("castleMuted") is bool:
+		out.settings.castleMuted = settings.castleMuted
 	return out
 
 

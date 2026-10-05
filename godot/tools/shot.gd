@@ -22,11 +22,15 @@ func _ready() -> void:
 		var args := {}
 		if parts.size() > 1:
 			args = JSON.parse_string(parts[1].replace("'", "\""))
-		App.go(parts[0], args)
-		for i in 6:
-			await get_tree().process_frame
-		get_viewport().get_texture().get_image().save_png(out_dir.path_join(parts[0] + ".png"))
-		print("shot ", parts[0])
+		var file: String = args.get("name", parts[0])
+		if parts[0] == "castle":
+			await _castle(args)
+		else:
+			App.go(parts[0], args)
+			for i in 6:
+				await get_tree().process_frame
+		get_viewport().get_texture().get_image().save_png(out_dir.path_join(file + ".png"))
+		print("shot ", file)
 	get_tree().quit()
 
 
@@ -47,3 +51,39 @@ func _seed() -> void:
 	DB.toggle_lesson("l1-1")
 	DB.log_history({ type = "drill", discipline = "numbers", label = "Numbers", level = 3, correct = 14, total = 16, accuracy = 88 })
 	DB.save("all")
+
+
+## castle:{name, mode, at (station index), x, z, yaw, cam_yaw, pitch, dist, quality, map, panel, frames}
+func _castle(args: Dictionary) -> void:
+	var main = App.main
+	if main.castle == null:
+		main.open_castle(DB.open_or_create_castle().id, args.get("mode", "study"))
+		await main.castle.built
+	var c: Castle = main.castle
+	App.close_modal()
+	if args.has("quality"):
+		c.set_quality(args.quality, false)
+	if args.has("at"):
+		c.teleport_to(int(args.at))
+	if args.has("x"):
+		c.player.place_at(float(args.x), float(args.z), float(args.get("yaw", 0.0)))
+	if args.has("cam_yaw"):
+		c.player.cam_yaw = float(args.cam_yaw)
+	if args.has("pitch"):
+		c.player.cam_pitch = float(args.pitch)
+	if args.has("dist"):
+		c.player.cam_dist = float(args.dist)
+		c.player.cur_dist = float(args.dist)
+	if args.get("map", false) and not c.hud.map.big:
+		c.hud.map.toggle()
+	if not args.get("map", false) and c.hud.map.big:
+		c.hud.map.toggle()
+	var t0 := Time.get_ticks_msec()
+	for i in int(args.get("frames", 60)):
+		await get_tree().process_frame
+	print("frames took %d ms" % (Time.get_ticks_msec() - t0))
+	if args.get("panel", false):
+		c.interact()
+		for i in 4:
+			await get_tree().process_frame
+	print(JSON.stringify(c.state()))
